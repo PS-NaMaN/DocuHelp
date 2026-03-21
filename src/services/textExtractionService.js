@@ -1,5 +1,6 @@
 import { marked } from 'marked'
 import { extractPdfText } from './pdfService'
+import { logAndRethrow } from '../utils/logger'
 
 const SUPPORTED_FILE_EXTENSIONS = new Set(['pdf', 'md', 'markdown', 'txt'])
 
@@ -7,24 +8,41 @@ const SUPPORTED_FILE_EXTENSIONS = new Set(['pdf', 'md', 'markdown', 'txt'])
  * Extract plain text from a supported uploaded file so it can move through chunking.
  *
  * @param {File} uploadedFile - The browser file selected by the user.
+ * @param {{
+ *   onPdfOcrProgress?: (progress: {
+ *     stage: 'ocr',
+ *     status: string,
+ *     progress: number,
+ *     pageNumber: number,
+ *     totalPages: number,
+ *   }) => void,
+ * }} [options={}] - Optional PDF OCR progress callback.
  * @returns {Promise<string>} Normalized plain text extracted from the file.
  */
-export async function extractTextFromFile(uploadedFile) {
-  const fileExtension = getFileExtension(uploadedFile.name)
+export async function extractTextFromFile(uploadedFile, options = {}) {
+  try {
+    const fileExtension = getFileExtension(uploadedFile.name)
 
-  validateSupportedFile(uploadedFile.name, fileExtension)
+    validateSupportedFile(uploadedFile.name, fileExtension)
 
-  if (fileExtension === 'pdf') {
-    return extractPdfText(uploadedFile)
+    if (fileExtension === 'pdf') {
+      return extractPdfText(uploadedFile, {
+        onOcrProgress: options.onPdfOcrProgress,
+      })
+    }
+
+    const rawFileText = await uploadedFile.text()
+
+    if (fileExtension === 'txt') {
+      return normalizeWhitespace(rawFileText)
+    }
+
+    return extractMarkdownText(rawFileText)
+  } catch (error) {
+    logAndRethrow('extractTextFromFile', error, {
+      fileName: uploadedFile.name,
+    })
   }
-
-  const rawFileText = await uploadedFile.text()
-
-  if (fileExtension === 'txt') {
-    return normalizeWhitespace(rawFileText)
-  }
-
-  return extractMarkdownText(rawFileText)
 }
 
 /**

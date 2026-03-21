@@ -1,6 +1,7 @@
 import { replaceChunksForDocument, saveDocument } from './db'
 import { extractTextFromFile, getFileExtension } from './textExtractionService'
 import { chunkText } from '../utils/chunkText'
+import { logAndRethrow } from '../utils/logger'
 
 /**
  * Run the full Phase 1 ingestion pipeline for uploaded documents.
@@ -16,35 +17,41 @@ import { chunkText } from '../utils/chunkText'
  * @returns {Promise<void>} Resolves after every file has been processed and stored.
  */
 export async function ingestDocuments(uploadedFiles, reportProgress) {
-  const { generateEmbeddings } = await import('./embeddingService')
+  try {
+    const { generateEmbeddings } = await import('./embeddingService')
 
-  for (let fileIndex = 0; fileIndex < uploadedFiles.length; fileIndex += 1) {
-    const uploadedFile = uploadedFiles[fileIndex]
-    const extractedDocumentText = await extractAndValidateText(
-      uploadedFile,
-      fileIndex,
-      uploadedFiles.length,
-      reportProgress,
-    )
+    for (let fileIndex = 0; fileIndex < uploadedFiles.length; fileIndex += 1) {
+      const uploadedFile = uploadedFiles[fileIndex]
+      const extractedDocumentText = await extractAndValidateText(
+        uploadedFile,
+        fileIndex,
+        uploadedFiles.length,
+        reportProgress,
+      )
 
-    const chunkRecords = createAndValidateChunks(extractedDocumentText, uploadedFile.name)
-    const embeddingVectors = await generateChunkEmbeddings(
-      generateEmbeddings,
-      chunkRecords,
-      uploadedFile,
-      fileIndex,
-      uploadedFiles.length,
-      reportProgress,
-    )
+      const chunkRecords = createAndValidateChunks(extractedDocumentText, uploadedFile.name)
+      const embeddingVectors = await generateChunkEmbeddings(
+        generateEmbeddings,
+        chunkRecords,
+        uploadedFile,
+        fileIndex,
+        uploadedFiles.length,
+        reportProgress,
+      )
 
-    await storeIndexedDocument(
-      uploadedFile,
-      chunkRecords,
-      embeddingVectors,
-      fileIndex,
-      uploadedFiles.length,
-      reportProgress,
-    )
+      await storeIndexedDocument(
+        uploadedFile,
+        chunkRecords,
+        embeddingVectors,
+        fileIndex,
+        uploadedFiles.length,
+        reportProgress,
+      )
+    }
+  } catch (error) {
+    logAndRethrow('ingestDocuments', error, {
+      fileCount: uploadedFiles.length,
+    })
   }
 }
 
@@ -66,7 +73,17 @@ async function extractAndValidateText(uploadedFile, fileIndex, totalFiles, repor
     message: `Extracting raw text from ${uploadedFile.name}...`,
   })
 
-  const extractedDocumentText = await extractTextFromFile(uploadedFile)
+  const extractedDocumentText = await extractTextFromFile(uploadedFile, {
+    onPdfOcrProgress: (ocrProgress) => {
+      reportStageProgress(reportProgress, {
+        stage: 'ocr',
+        fileName: uploadedFile.name,
+        current: fileIndex + createPageProgressRatio(ocrProgress),
+        total: totalFiles,
+        message: createOcrProgressMessage(uploadedFile.name, ocrProgress),
+      })
+    },
+  })
 
   if (extractedDocumentText) {
     return extractedDocumentText
@@ -240,6 +257,42 @@ function createEmbeddingStartMessage(chunkCount) {
  */
 function createEmbeddingProgressMessage(fileName, currentChunkIndex, totalChunks) {
   return `Embedding chunk ${Math.min(currentChunkIndex + 1, totalChunks)} of ${totalChunks} for ${fileName}...`
+}
+
+/**
+ * Format OCR progress updates so the UI can explain long-running scanned-page extraction.
+ *
+ * @param {string} fileName - Name of the file currently being OCR'd.
+ * @param {{
+ *   status: string,
+ *   progress: number,
+ *   pageNumber: number,
+ *   totalPages: number,
+ * }} ocrProgress - OCR status payload from the PDF extraction layer.
+ * @returns {string} A user-facing OCR progress message.
+ */
+function createOcrProgressMessage(fileName, ocrProgress) {
+  const pageLabel = `page ${ocrProgress.pageNumber} of ${ocrProgress.totalPages}`
+  const percentComplete = Math.round((ocrProgress.progress ?? 0) * 100)
+
+  return `Running OCR for ${fileName} (${pageLabel}) - ${ocrProgress.status} (${percentComplete}%).`
+}
+
+/**
+ * Convert page-level OCR progress into a fractional file-level progress ratio.
+ *
+ * @param {{
+ *   progress: number,
+ *   pageNumber: number,
+ *   totalPages: number,
+ * }} ocrProgress - OCR status payload from the PDF extraction layer.
+ * @returns {number} Fractional progress contribution for the current file.
+ */
+function createPageProgressRatio(ocrProgress) {
+  const completedPages = Math.max(ocrProgress.pageNumber - 1, 0)
+  const currentPageProgress = ocrProgress.progress ?? 0
+
+  return (completedPages + currentPageProgress) / Math.max(ocrProgress.totalPages, 1)
 }
 
 /**
