@@ -1,16 +1,71 @@
-# React + Vite
+# 📄 DocuHelp: Privacy-First RAG Document Analyzer
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+**DocuHelp** is a high-performance, RAG-based document analyzer that operates **entirely within your browser**. Your documents never leave your computer, ensuring total privacy and security.
 
-Currently, two official plugins are available:
+![Main Interface Placeholder](https://via.placeholder.com/800x400/0f172a/ffffff?text=DocuHelp+-+Local+AI+Document+Analysis)
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+---
 
-## React Compiler
+## ✨ Key Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- 🔒 **100% Local & Private**: No data is ever uploaded to a server. All parsing, embedding, and inference happen in your browser.
+- ⚡ **WebGPU Accelerated**: Leverages **WebLLM** and **MLC runtime** to run large language models (LLMs) like Llama 3.2, Qwen 2.5, and DeepSeek R1 directly on your hardware.
+- 🧠 **Modern RAG Pipeline**: Built-in document parsing, semantic chunking, and vector search.
+- 📂 **Multi-Format Support**: Parse and analyze PDF, Markdown, and TXT files instantly.
+- 💾 **Persistent Storage**: Uses **IndexedDB** to store your document chunks and vector embeddings securely across sessions.
 
-## Expanding the ESLint configuration
+---
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## 🛠️ The Tech Stack
+
+- **Frontend**: [React](https://reactjs.org/) + [Vite](https://vitejs.dev/) + [Tailwind CSS](https://tailwindcss.com/)
+- **AI Inference**: [WebLLM](https://webllm.mlc.ai/) (LLM) & [Transformers.js](https://huggingface.co/docs/transformers.js/) (Embeddings)
+- **Vector Search**: Custom Cosine Similarity search with **IndexedDB** persistence
+- **Parsing**: [pdf.js](https://mozilla.github.io/pdf.js/) & [marked.js](https://marked.js.org/)
+
+---
+
+## 🔄 How It Works (The Pipeline)
+
+### 1. Document Ingestion
+- **Parse & Chunk**: Documents are split into ~400-token windows with a 50-token overlap to preserve context boundaries.
+- **Embed**: Each chunk is run through the `all-MiniLM-L6-v2` model in-browser to generate 384-dimensional vectors.
+- **Store**: Chunks and vectors are persisted to **IndexedDB** for fast future access without re-processing.
+
+### 2. Intelligent Querying
+- **Semantic Search**: Your query is embedded and compared against stored chunks using cosine similarity.
+- **Context Injection**: The top-5 most relevant chunks are injected into a structured system prompt.
+- **Streaming Inference**: The LLM (processed via WebGPU) generates and streams the answer directly to the chat interface with source citations.
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+- A modern browser with **WebGPU** support (Chrome, Edge, or latest Safari/Firefox).
+- [Node.js](https://nodejs.org/) (v18+)
+
+### Installation
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/PS-NaMaN/DocuHelp.git
+   cd DocuHelp
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Run the development server:
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 📄 License
+
+This project is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)** - see the [LICENSE](LICENSE) file for details.
+
+---
+
+Built with ❤️ by [NaMaN](https://github.com/PS-NaMaN)
