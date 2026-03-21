@@ -9,7 +9,7 @@
 ## ✨ Key Features
 
 - 🔒 **100% Local & Private**: No data is ever uploaded to a server. All parsing, embedding, and inference happen in your browser.
-- ⚡ **WebGPU Accelerated**: Leverages **WebLLM** and **MLC runtime** to run large language models (LLMs) like Llama 3.2, Qwen 2.5, and DeepSeek R1 directly on your hardware.
+- ⚡ **WebGPU Accelerated**: Leverages **WebLLM** and **MLC runtime** to run small language models (SLMs)
 - 🧠 **Modern RAG Pipeline**: Built-in document parsing, semantic chunking, and vector search.
 - 📂 **Multi-Format Support**: Parse and analyze PDF, Markdown, and TXT files instantly.
 - 💾 **Persistent Storage**: Uses **IndexedDB** to store your document chunks and vector embeddings securely across sessions.
