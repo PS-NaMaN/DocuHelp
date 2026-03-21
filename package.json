@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
+    "@mlc-ai/web-llm": "^0.2.82",
     "idb": "^8.0.3",
     "marked": "^17.0.5",
     "pdfjs-dist": "^5.5.207",

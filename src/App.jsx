@@ -5,6 +5,8 @@ import {
   getStoredDocuments,
   getStorageSummary,
 } from './services/libraryService'
+import { useLocalLLM } from './hooks/useLocalLLM'
+import ModelLoader from './components/ModelLoader'
 
 const ACCEPTED_FILE_TYPES =
   '.pdf,.md,.markdown,.txt,text/plain,application/pdf,text/markdown'
@@ -30,6 +32,15 @@ function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [ingestionProgress, setIngestionProgress] = useState(INITIAL_PROGRESS_STATE)
   const [errorMessage, setErrorMessage] = useState('')
+  const {
+    isSupported: isLocalLlmSupported,
+    isLoading: isLocalLlmLoading,
+    progressText: localLlmProgressText,
+    progressValue: localLlmProgressValue,
+    isReady: isLocalLlmReady,
+    errorMessage: localLlmErrorMessage,
+    initializeModel,
+  } = useLocalLLM()
 
   useEffect(() => {
     void refreshLibraryState()
@@ -148,7 +159,15 @@ function App() {
             onFileUpload={handleFileUpload}
             onOpenSettings={openSettingsModal}
           />
-          <MainWorkspace />
+          <MainWorkspace
+            isLocalLlmSupported={isLocalLlmSupported}
+            isLocalLlmLoading={isLocalLlmLoading}
+            localLlmProgressText={localLlmProgressText}
+            localLlmProgressValue={localLlmProgressValue}
+            isLocalLlmReady={isLocalLlmReady}
+            localLlmErrorMessage={localLlmErrorMessage}
+            onInitializeModel={initializeModel}
+          />
         </div>
       </div>
 
@@ -521,9 +540,29 @@ function SettingsButton({ onOpenSettings }) {
 /**
  * Render the placeholder main workspace for later query phases.
  *
+ * @param {{
+ *   isLocalLlmSupported: boolean | null,
+ *   isLocalLlmLoading: boolean,
+ *   localLlmProgressText: string,
+ *   localLlmProgressValue: number,
+ *   isLocalLlmReady: boolean,
+ *   localLlmErrorMessage: string,
+ *   onInitializeModel: () => Promise<unknown>,
+ * }} props - Model loader state and actions for Phase 2.
  * @returns {JSX.Element} The main content panel.
  */
-function MainWorkspace() {
+function MainWorkspace({
+  isLocalLlmSupported,
+  isLocalLlmLoading,
+  localLlmProgressText,
+  localLlmProgressValue,
+  isLocalLlmReady,
+  localLlmErrorMessage,
+  onInitializeModel,
+}) {
+  const showInitializeButton =
+    isLocalLlmSupported === true && !isLocalLlmLoading && !isLocalLlmReady
+
   return (
     <main className="flex min-h-[720px] flex-col overflow-hidden rounded-[2rem] border border-stone-200/80 bg-stone-950 text-stone-100 shadow-[0_24px_80px_rgba(28,25,23,0.12)]">
       <div className="border-b border-white/10 px-6 py-6">
@@ -541,24 +580,49 @@ function MainWorkspace() {
           <div className="mt-4 flex h-full min-h-[320px] flex-col justify-between rounded-[1.3rem] border border-dashed border-white/12 bg-black/10 p-5">
             <div>
               <p className="text-sm text-stone-300">
-                Phase 1 stores chunked embeddings locally. Phase 2 will load WebLLM, confirm
-                WebGPU support, and cache the selected model for offline-ready generation.
+                Phase 1 stores chunked embeddings locally. Phase 2 now checks WebGPU support,
+                downloads the selected WebLLM model, and prepares the browser for fully local
+                inference.
               </p>
             </div>
             <div className="grid gap-3 text-sm text-stone-400 md:grid-cols-3">
-              <PlaceholderTile title="Phase 2" body="Model loading and fallback UX" />
+              <PlaceholderTile title="Phase 2" body="WebGPU model loading and fallback UX" />
               <PlaceholderTile title="Phase 3" body="Similarity search and prompt assembly" />
               <PlaceholderTile title="Phase 4" body="Chat polish, citations, deployment" />
             </div>
           </div>
         </section>
 
-        <section className="rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(8,145,178,0.08),_rgba(255,255,255,0.03))] p-5">
-          <p className="text-sm font-semibold text-white">Pipeline notes</p>
-          <div className="mt-4 space-y-3 text-sm leading-6 text-stone-300">
+        <section className="space-y-4 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(8,145,178,0.08),_rgba(255,255,255,0.03))] p-5">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-white">Model loading</p>
+            {showInitializeButton ? (
+              <button
+                type="button"
+                className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-cyan-300"
+                onClick={() => {
+                  void onInitializeModel()
+                }}
+              >
+                Initialize Local Model
+              </button>
+            ) : null}
+          </div>
+
+          <ModelLoader
+            isSupported={isLocalLlmSupported}
+            isLoading={isLocalLlmLoading}
+            progressText={localLlmProgressText}
+            progressValue={localLlmProgressValue}
+            isReady={isLocalLlmReady}
+            errorMessage={localLlmErrorMessage}
+          />
+
+          <div className="space-y-3 text-sm leading-6 text-stone-300">
             <InfoPill label="Parsing" value="pdf.js + markdown token walker + plain text reader" />
             <InfoPill label="Chunking" value="~400 token windows with 50 token overlap" />
             <InfoPill label="Embeddings" value="transformers.js MiniLM vectors in browser cache" />
+            <InfoPill label="Local LLM" value="WebLLM engine cached and compiled with WebGPU" />
             <InfoPill label="Storage" value="IndexedDB survives refresh with chunk metadata" />
           </div>
         </section>
