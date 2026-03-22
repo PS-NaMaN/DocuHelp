@@ -58,22 +58,18 @@ function LibraryModal({ storedDocuments, deletingFileName, onDeleteDocument }) {
  */
 function LibraryDocumentCard({ storedDocument, isDeleting, onDeleteDocument }) {
   return (
-    <article className="rounded-[1.2rem] border border-stone-200 bg-stone-50 px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-stone-900">{storedDocument.name}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
-            {storedDocument.extension} / {storedDocument.chunkCount} chunks
+    <article className="rounded-[1.2rem] border border-stone-200 bg-stone-50 p-3">
+      <div className="flex flex-col gap-2">
+        <div className="flex items-start justify-between gap-2">
+          <p 
+            className="flex-1 text-[13px] font-medium leading-5 text-stone-900 break-words line-clamp-2" 
+            title={storedDocument.name}
+          >
+            {storedDocument.name}
           </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-stone-500">
-            {storedDocument.embeddingDimensions}d
-          </span>
           <button
             type="button"
-            className="flex h-9 w-9 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={() => {
               void onDeleteDocument(storedDocument.name)
             }}
@@ -83,6 +79,15 @@ function LibraryDocumentCard({ storedDocument, isDeleting, onDeleteDocument }) {
           >
             {isDeleting ? '...' : '×'}
           </button>
+        </div>
+
+        <div className="flex items-center justify-between mt-1">
+          <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 truncate pr-2">
+            {storedDocument.extension} • {storedDocument.chunkCount} chunks
+          </p>
+          <span className="flex-shrink-0 rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-bold text-stone-500 shadow-sm">
+            {storedDocument.embeddingDimensions}d
+          </span>
         </div>
       </div>
     </article>

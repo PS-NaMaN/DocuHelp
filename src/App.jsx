@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
+import Sidebar from './components/Sidebar'
 import ChatInterface from './components/ChatInterface'
-import LibraryModal from './components/LibraryModal'
 import ModelLoader from './components/ModelLoader'
 import SettingsModal from './components/SettingsModal'
 import { useLocalLLM } from './hooks/useLocalLLM'
@@ -18,9 +18,6 @@ import {
   DEFAULT_WEB_LLM_MODEL_ID,
   getActiveModelId,
 } from './services/llmService'
-
-const ACCEPTED_FILE_TYPES =
-  '.pdf,.md,.markdown,.txt,text/plain,application/pdf,text/markdown'
 
 const INITIAL_PROGRESS_STATE = {
   stage: 'idle',
@@ -237,10 +234,8 @@ function App() {
   const progressPercentage = calculateProgressPercentage(ingestionProgress)
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(249,115,22,0.16),_transparent_22%),linear-gradient(135deg,_#f6f3ee_0%,_#fffdf9_36%,_#fff9f0_100%)] text-stone-900">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1600px] flex-col px-4 py-4 lg:px-6 lg:py-6">
-        <div className="grid flex-1 gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
-          <Sidebar
+    <div className="flex h-screen w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(249,115,22,0.16),_transparent_22%),linear-gradient(135deg,_#f6f3ee_0%,_#fffdf9_36%,_#fff9f0_100%)] text-stone-900">
+      <Sidebar
             storedDocuments={storedDocuments}
             storageSummary={storageSummary}
             ingestionProgress={ingestionProgress}
@@ -268,8 +263,6 @@ function App() {
             toggleFileSelection={toggleFileSelection}
             onAskQuestion={askQuestion}
           />
-        </div>
-      </div>
 
       {isSettingsModalOpen ? (
         <SettingsModal
@@ -429,193 +422,7 @@ function syncActiveFileNamesWithAvailableFiles(previousActiveFileNames, availabl
   return previousActiveFileNames.filter((activeFileName) => availableFileNames.includes(activeFileName))
 }
 
-/**
- * Render the left sidebar with upload, status, library, and settings controls.
- *
- * @param {{
- *   storedDocuments: Array<Record<string, unknown>>,
- *   storageSummary: { documentCount: number, chunkCount: number },
- *   ingestionProgress: { stage: string, fileName: string, message: string },
- *   progressPercentage: number,
- *   errorMessage: string,
- *   isIngestingDocuments: boolean,
- *   deletingDocumentFileName: string,
- *   onFileUpload: (event: { target: HTMLInputElement }) => Promise<void>,
- *   onDeleteDocument: (fileName: string) => Promise<void>,
- *   onOpenSettings: () => void,
- * }} props - Sidebar display and event props.
- * @returns {JSX.Element} The sidebar panel.
- */
-function Sidebar({
-  storedDocuments,
-  storageSummary,
-  ingestionProgress,
-  progressPercentage,
-  errorMessage,
-  isIngestingDocuments,
-  deletingDocumentFileName,
-  onFileUpload,
-  onDeleteDocument,
-  onOpenSettings,
-}) {
-  return (
-    <aside className="overflow-hidden rounded-[2rem] border border-stone-200/80 bg-white/88 shadow-[0_24px_80px_rgba(28,25,23,0.08)] backdrop-blur">
-      <SidebarHero />
 
-      <div className="space-y-6 p-6">
-        <UploadPanel
-          isIngestingDocuments={isIngestingDocuments}
-          onFileUpload={onFileUpload}
-        />
-        <StatusPanel
-          ingestionProgress={ingestionProgress}
-          progressPercentage={progressPercentage}
-          storageSummary={storageSummary}
-          errorMessage={errorMessage}
-        />
-        <LibraryModal
-          storedDocuments={storedDocuments}
-          deletingFileName={deletingDocumentFileName}
-          onDeleteDocument={onDeleteDocument}
-        />
-        <SettingsButton onOpenSettings={onOpenSettings} />
-      </div>
-    </aside>
-  )
-}
-
-/**
- * Render the branded sidebar header.
- *
- * @returns {JSX.Element} The sidebar hero section.
- */
-function SidebarHero() {
-  return (
-    <div className="border-b border-stone-200/80 bg-[linear-gradient(135deg,_rgba(8,145,178,0.08),_rgba(251,146,60,0.14))] px-6 py-6">
-      <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-700">Phase 1</p>
-      <h1 className="mt-3 font-serif text-3xl leading-tight text-stone-950">DocuHelp</h1>
-      <p className="mt-3 max-w-sm text-sm leading-6 text-stone-600">
-        A private, in-browser document analyzer. Files stay on-device while text, chunks,
-        and embeddings are indexed into local storage.
-      </p>
-    </div>
-  )
-}
-
-/**
- * Render the upload control card.
- *
- * @param {{
- *   isIngestingDocuments: boolean,
- *   onFileUpload: (event: { target: HTMLInputElement }) => Promise<void>,
- * }} props - Upload state and change handler.
- * @returns {JSX.Element} The upload panel.
- */
-function UploadPanel({ isIngestingDocuments, onFileUpload }) {
-  return (
-    <section className="rounded-[1.5rem] border border-dashed border-cyan-300 bg-cyan-50/80 p-5">
-      <p className="text-sm font-semibold text-cyan-900">Upload documents</p>
-      <p className="mt-2 text-sm leading-6 text-cyan-800/80">
-        Accepts PDF, Markdown, and plain text. Embeddings are generated in the browser with
-        `all-MiniLM-L6-v2`.
-      </p>
-      <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[1.2rem] border border-cyan-200 bg-white px-4 py-6 text-center transition hover:border-cyan-400 hover:bg-cyan-50">
-        <span className="text-sm font-medium text-stone-800">Choose one or more files</span>
-        <span className="mt-2 text-xs uppercase tracking-[0.24em] text-stone-500">
-          PDF / MD / TXT
-        </span>
-        <input
-          className="sr-only"
-          type="file"
-          accept={ACCEPTED_FILE_TYPES}
-          multiple
-          onChange={onFileUpload}
-          disabled={isIngestingDocuments}
-        />
-      </label>
-    </section>
-  )
-}
-
-/**
- * Render the current ingestion status card.
- *
- * @param {{
- *   ingestionProgress: { stage: string, fileName: string, message: string },
- *   progressPercentage: number,
- *   storageSummary: { documentCount: number, chunkCount: number },
- *   errorMessage: string,
- * }} props - Current progress and summary values.
- * @returns {JSX.Element} The status panel.
- */
-function StatusPanel({
-  ingestionProgress,
-  progressPercentage,
-  storageSummary,
-  errorMessage,
-}) {
-  return (
-    <section className="rounded-[1.5rem] border border-stone-200 bg-stone-50/80 p-5">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-stone-900">Index status</p>
-          <p className="mt-1 text-sm text-stone-600">{ingestionProgress.message}</p>
-        </div>
-        <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
-          {ingestionProgress.stage}
-        </span>
-      </div>
-
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-stone-200">
-        <div
-          className="h-full rounded-full bg-[linear-gradient(90deg,_#0891b2,_#f97316)] transition-all duration-500"
-          style={{ width: `${progressPercentage}%` }}
-        />
-      </div>
-
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        <StatCard label="Documents" value={storageSummary.documentCount} />
-        <StatCard label="Chunks" value={storageSummary.chunkCount} />
-      </div>
-
-      {ingestionProgress.fileName ? (
-        <p className="mt-4 truncate text-sm text-stone-500">
-          Working on <span className="font-medium text-stone-700">{ingestionProgress.fileName}</span>
-        </p>
-      ) : null}
-
-      {errorMessage ? (
-        <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          {errorMessage}
-        </p>
-      ) : null}
-    </section>
-  )
-}
-
-/**
- * Render the sidebar settings launcher.
- *
- * @param {{ onOpenSettings: () => void }} props - Settings open handler.
- * @returns {JSX.Element} The settings button.
- */
-function SettingsButton({ onOpenSettings }) {
-  return (
-    <button
-      type="button"
-      className="flex w-full items-center justify-between rounded-[1.4rem] border border-stone-200 bg-white px-5 py-4 text-left transition hover:border-stone-300 hover:bg-stone-50"
-      onClick={onOpenSettings}
-    >
-      <div>
-        <p className="text-sm font-semibold text-stone-900">Settings</p>
-        <p className="mt-1 text-sm text-stone-500">Manage OCR, local models, and indexed data.</p>
-      </div>
-      <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
-        Open
-      </span>
-    </button>
-  )
-}
 
 /**
  * Render the main workspace including chat and model loader panels.
@@ -663,8 +470,8 @@ function MainWorkspace({
     isLocalLlmSupported === true && !isLocalLlmLoading && !isLocalLlmReady
 
   return (
-    <main className="flex min-h-[720px] flex-col overflow-hidden rounded-[2rem] border border-stone-200/80 bg-stone-950 text-stone-100 shadow-[0_24px_80px_rgba(28,25,23,0.12)]">
-      <div className="border-b border-white/10 px-6 py-6">
+    <main className="flex-1 flex flex-col h-full relative bg-stone-950 text-stone-100 shadow-[0_24px_80px_rgba(28,25,23,0.12)]">
+      <div className="flex-shrink-0 border-b border-white/10 px-6 py-6">
         <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
           Retrieval Workspace
         </p>
@@ -673,8 +480,9 @@ function MainWorkspace({
         </h2>
       </div>
 
-      <div className="grid flex-1 gap-4 p-6 lg:grid-cols-[1.4fr_0.9fr]">
-        <ChatInterface
+      <div className="flex-1 flex flex-col overflow-hidden lg:flex-row">
+        <div className="flex-1 flex flex-col min-w-0">
+          <ChatInterface
           messages={messages}
           currentStreamingReply={currentStreamingReply}
           isGenerating={isGenerating}
@@ -682,10 +490,11 @@ function MainWorkspace({
           availableFileNames={availableFileNames}
           activeFileNames={activeFileNames}
           toggleFileSelection={toggleFileSelection}
-          onAskQuestion={onAskQuestion}
-        />
+            onAskQuestion={onAskQuestion}
+          />
+        </div>
 
-        <section className="space-y-4 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(8,145,178,0.08),_rgba(255,255,255,0.03))] p-5">
+        <section className="w-full lg:w-80 flex-shrink-0 overflow-y-auto border-l border-white/10 bg-[linear-gradient(180deg,_rgba(8,145,178,0.08),_rgba(255,255,255,0.03))] p-5">
           <div className="flex items-center justify-between gap-3">
             <p className="text-sm font-semibold text-white">Model loading</p>
             {showInitializeButton ? (
@@ -724,20 +533,7 @@ function MainWorkspace({
   )
 }
 
-/**
- * Render a compact stat card used in the sidebar summary.
- *
- * @param {{ label: string, value: number }} props - Summary label and numeric value.
- * @returns {JSX.Element} A small stat card.
- */
-function StatCard({ label, value }) {
-  return (
-    <div className="rounded-[1.2rem] border border-stone-200 bg-white px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-stone-950">{value}</p>
-    </div>
-  )
-}
+
 
 /**
  * Render a labeled pipeline note card in the main workspace.

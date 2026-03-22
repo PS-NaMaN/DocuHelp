@@ -1,4 +1,9 @@
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
+import 'katex/dist/katex.min.css'
 import { logFunctionError } from '../utils/logger'
 
 /**
@@ -32,6 +37,15 @@ function ChatInterface({
   onAskQuestion,
 }) {
   const [draftQuery, setDraftQuery] = useState('')
+  const messagesEndRef = useRef(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, currentStreamingReply])
 
   /**
    * Submit the current draft to the local RAG pipeline.
@@ -61,17 +75,19 @@ function ChatInterface({
   }
 
   return (
-    <section className="flex h-full min-h-[640px] flex-col rounded-[1.8rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(255,255,255,0.06),_rgba(255,255,255,0.03))]">
-      <ChatHeader
-        messageCount={messages.length}
-        isGenerating={isGenerating}
-        isModelReady={isModelReady}
-        availableFileNames={availableFileNames}
-        activeFileNames={activeFileNames}
-        toggleFileSelection={toggleFileSelection}
-      />
+    <section className="flex flex-col h-full bg-[linear-gradient(180deg,_rgba(255,255,255,0.06),_rgba(255,255,255,0.03))]">
+      <div className="flex-shrink-0">
+        <ChatHeader
+          messageCount={messages.length}
+          isGenerating={isGenerating}
+          isModelReady={isModelReady}
+          availableFileNames={availableFileNames}
+          activeFileNames={activeFileNames}
+          toggleFileSelection={toggleFileSelection}
+        />
+      </div>
 
-      <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
+      <div className="flex-1 overflow-y-auto p-4 md:p-6">
         {messages.length || currentStreamingReply ? (
           <div className="space-y-5">
             {messages.map((message) => (
@@ -81,19 +97,25 @@ function ChatInterface({
             {currentStreamingReply ? (
               <StreamingMessageBubble currentStreamingReply={currentStreamingReply} />
             ) : null}
+            <div ref={messagesEndRef} className="h-4" />
           </div>
         ) : (
-          <EmptyChatState isModelReady={isModelReady} />
+          <div className="h-full flex flex-col justify-center">
+            <EmptyChatState isModelReady={isModelReady} />
+            <div ref={messagesEndRef} />
+          </div>
         )}
       </div>
 
-      <ChatComposer
-        draftQuery={draftQuery}
-        isGenerating={isGenerating}
-        isModelReady={isModelReady}
-        onDraftQueryChange={setDraftQuery}
-        onSubmit={handleSubmit}
-      />
+      <div className="flex-shrink-0 p-4 border-t border-white/10 bg-black/5">
+        <ChatComposer
+          draftQuery={draftQuery}
+          isGenerating={isGenerating}
+          isModelReady={isModelReady}
+          onDraftQueryChange={setDraftQuery}
+          onSubmit={handleSubmit}
+        />
+      </div>
     </section>
   )
 }
@@ -239,9 +261,15 @@ function ChatMessageBubble({ message }) {
         <p className="text-xs font-semibold uppercase tracking-[0.2em] opacity-70">
           {isUserMessage ? 'You' : 'DocuHelp'}
         </p>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-7 md:text-[15px]">
-          {message.content}
-        </p>
+
+        <div className={`mt-3 prose prose-sm max-w-none prose-p:leading-7 md:prose-base md:prose-p:leading-8 ${isUserMessage ? 'prose-stone prose-p:text-stone-950' : 'prose-invert prose-p:text-stone-100'}`}>
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+          >
+            {message.content}
+          </ReactMarkdown>
+        </div>
 
         {message.role === 'assistant' && message.citations?.length ? (
           <CitationChipList citations={message.citations} />
@@ -264,10 +292,15 @@ function StreamingMessageBubble({ currentStreamingReply }) {
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-cyan-300/80">
           DocuHelp
         </p>
-        <p className="mt-3 whitespace-pre-wrap text-sm leading-7 md:text-[15px]">
-          {currentStreamingReply}
+        <div className="mt-3 prose prose-sm prose-invert max-w-none prose-p:leading-7 md:prose-base md:prose-p:leading-8 prose-p:text-stone-100">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm, remarkMath]}
+            rehypePlugins={[rehypeKatex]}
+          >
+            {currentStreamingReply}
+          </ReactMarkdown>
           <span className="ml-1 inline-block h-5 w-2 rounded-sm bg-cyan-300 align-middle animate-pulse" />
-        </p>
+        </div>
       </article>
     </div>
   )
@@ -359,7 +392,7 @@ function ChatComposer({
   const isSubmitDisabled = !draftQuery.trim() || !isModelReady || isGenerating
 
   return (
-    <form className="border-t border-white/10 px-5 py-5 md:px-6" onSubmit={onSubmit}>
+    <form className="w-full" onSubmit={onSubmit}>
       <div className="rounded-[1.7rem] border border-white/10 bg-black/15 p-3 shadow-[0_20px_60px_rgba(15,23,42,0.14)]">
         <label className="block">
           <span className="sr-only">Ask a question about your indexed documents</span>
