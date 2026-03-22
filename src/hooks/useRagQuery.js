@@ -1,6 +1,9 @@
 import { useRef, useState } from 'react'
 import { generateEmbedding } from '../services/embeddingService'
-import { buildSystemPrompt } from '../services/ragGenerationService'
+import {
+  buildContextualUserMessage,
+  buildSystemPrompt,
+} from '../services/ragGenerationService'
 import { searchSimilarChunks } from '../services/vectorSearchService'
 import { logFunctionError } from '../utils/logger'
 
@@ -64,11 +67,15 @@ export function useRagQuery(options) {
     try {
       const queryVector = await generateEmbedding(normalizedUserQuery)
       const retrievedChunks = await searchSimilarChunks(queryVector, topK, activeFileNames)
-      const systemPrompt = buildSystemPrompt(retrievedChunks)
+      const systemPrompt = buildSystemPrompt()
+      const contextualUserMessage = buildContextualUserMessage(
+        retrievedChunks,
+        normalizedUserQuery,
+      )
       const streamedReply = await streamRagAnswer(
         engine,
         systemPrompt,
-        normalizedUserQuery,
+        contextualUserMessage,
         generationSettings,
         setCurrentStreamingReply,
       )
@@ -167,7 +174,7 @@ export function useRagQuery(options) {
  *
  * @param {import('@mlc-ai/web-llm').MLCEngine} engine - Active local WebLLM engine.
  * @param {string} systemPrompt - Retrieval-grounded system prompt.
- * @param {string} userQuery - Original user question.
+ * @param {string} contextualUserMessage - Final user message containing both context and the question.
  * @param {{
  *   temperature?: number,
  *   topP?: number,
@@ -182,10 +189,17 @@ export function useRagQuery(options) {
 async function streamRagAnswer(
   engine,
   systemPrompt,
-  userQuery,
+  contextualUserMessage,
   generationSettings,
   updateStreamingReply,
 ) {
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: contextualUserMessage },
+  ]
+
+  console.log("🚀 FINAL PAYLOAD TO LLM:", messages)
+
   const responseStream = await engine.chat.completions.create({
     stream: true,
     temperature: generationSettings?.temperature,
@@ -194,10 +208,7 @@ async function streamRagAnswer(
     presence_penalty: generationSettings?.presencePenalty,
     frequency_penalty: generationSettings?.frequencyPenalty,
     repetition_penalty: generationSettings?.repetitionPenalty,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userQuery },
-    ],
+    messages,
   })
 
   let accumulatedReply = ''

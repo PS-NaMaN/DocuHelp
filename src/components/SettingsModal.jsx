@@ -64,32 +64,34 @@ function SettingsModal({
       onClick={handleOverlayClick}
     >
       <div
-        className="w-full max-w-2xl rounded-[2rem] border border-stone-200 bg-white p-6 shadow-[0_30px_120px_rgba(28,25,23,0.22)]"
+        className="flex w-full max-w-2xl max-h-[min(90vh,900px)] flex-col rounded-[2rem] border border-stone-200 bg-white shadow-[0_30px_120px_rgba(28,25,23,0.22)] overflow-hidden"
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
-              Settings
-            </p>
-            <h3 className="mt-3 font-serif text-3xl leading-tight text-stone-950">
-              Local processing controls
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-stone-600">
-              Tune OCR behavior, inspect the active browser LLM, and manage locally indexed data for this site.
-            </p>
+        <div className="flex-shrink-0 border-b border-stone-100 p-8 pb-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
+                Settings
+              </p>
+              <h3 className="mt-3 font-serif text-3xl leading-tight text-stone-950">
+                Local processing controls
+              </h3>
+            </div>
+            <button
+              type="button"
+              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50"
+              onClick={onClose}
+              disabled={isDeletingIndexedData || isChangingModel}
+            >
+              Close
+            </button>
           </div>
-          <button
-            type="button"
-            className="rounded-full border border-stone-200 px-3 py-2 text-sm font-medium text-stone-500 transition hover:border-stone-300 hover:text-stone-700"
-            onClick={onClose}
-            disabled={isDeletingIndexedData || isChangingModel}
-          >
-            Close
-          </button>
+          <p className="mt-4 text-sm leading-6 text-stone-600">
+            Tune OCR behavior, inspect the active browser LLM, and manage locally indexed data for this site.
+          </p>
         </div>
 
-        <div className="mt-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-8 pt-6 space-y-6">
           <OcrSettingsCard ocrScale={ocrScale} onChangeOcrScale={onChangeOcrScale} />
           <ModelSettingsCard
             currentModelId={currentModelId}

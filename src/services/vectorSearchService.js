@@ -38,7 +38,7 @@ export function computeCosineSimilarity(vectorA, vectorB) {
  * Search IndexedDB for the chunks most similar to the provided query vector.
  *
  * @param {Float32Array} queryVector - Embedded user query vector.
- * @param {number} [topK=5] - Maximum number of chunks to return.
+ * @param {number} [topK=3] - Maximum number of chunks to return.
  * @returns {Promise<Array<{
  *   id: number,
  *   documentId: number,
@@ -50,13 +50,9 @@ export function computeCosineSimilarity(vectorA, vectorB) {
  *   citationLabel: string,
  * }>>} Ranked chunk search results.
  */
-export async function searchSimilarChunks(queryVector, topK = 5, activeFileNames = []) {
+export async function searchSimilarChunks(queryVector, topK = 3, activeFileNames = []) {
   try {
     if (!queryVector.length || topK <= 0) {
-      return []
-    }
-
-    if (Array.isArray(activeFileNames) && !activeFileNames.length) {
       return []
     }
 
@@ -69,7 +65,7 @@ export async function searchSimilarChunks(queryVector, topK = 5, activeFileNames
       .map((storedChunk) => createRankedChunkResult(storedChunk, queryVector, documentNameById))
       .sort(sortBySimilarityDescending)
 
-    return rankedChunks.slice(0, topK)
+    return rankedChunks.slice(0, Math.min(topK, 3))
   } catch (error) {
     logAndRethrow('searchSimilarChunks', error, {
       topK,
