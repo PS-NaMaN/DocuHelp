@@ -20,6 +20,9 @@ import { logFunctionError } from '../utils/logger'
  *   }>,
  *   isGenerating: boolean,
  *   currentStreamingReply: string,
+ *   activeFileNames: string[],
+ *   setActiveFileNames: React.Dispatch<React.SetStateAction<string[]>>,
+ *   toggleFileSelection: (fileName: string) => void,
  *   askQuestion: (userQuery: string) => Promise<void>,
  * }} Query state and orchestrator function.
  */
@@ -29,6 +32,7 @@ export function useRagQuery(options) {
   const [messages, setMessages] = useState([])
   const [isGenerating, setIsGenerating] = useState(false)
   const [currentStreamingReply, setCurrentStreamingReply] = useState('')
+  const [activeFileNames, setActiveFileNames] = useState([])
 
   /**
    * Run the full local RAG pipeline for one user question and stream the answer.
@@ -51,7 +55,7 @@ export function useRagQuery(options) {
 
     try {
       const queryVector = await generateEmbedding(normalizedUserQuery)
-      const retrievedChunks = await searchSimilarChunks(queryVector, topK)
+      const retrievedChunks = await searchSimilarChunks(queryVector, topK, activeFileNames)
       const systemPrompt = buildSystemPrompt(retrievedChunks)
       const streamedReply = await streamRagAnswer(engine, systemPrompt, normalizedUserQuery, setCurrentStreamingReply)
       const assistantMessage = createAssistantMessage(streamedReply, retrievedChunks)
@@ -62,6 +66,7 @@ export function useRagQuery(options) {
       logFunctionError('useRagQuery.askQuestion', error, {
         queryLength: normalizedUserQuery.length,
         topK,
+        activeFileCount: activeFileNames.length,
       })
       setCurrentStreamingReply('Unable to generate a local answer for this question.')
     } finally {
@@ -69,10 +74,35 @@ export function useRagQuery(options) {
     }
   }
 
+  /**
+   * Toggle one file name inside the active retrieval filter set using immutable updates.
+   *
+   * @param {string} fileName - File name to add or remove from the active selection.
+   * @returns {void}
+   */
+  function toggleFileSelection(fileName) {
+    if (!fileName) {
+      return
+    }
+
+    setActiveFileNames((previousActiveFileNames) => {
+      const updatedActiveFileNames = previousActiveFileNames.includes(fileName)
+        ? previousActiveFileNames.filter((activeFileName) => activeFileName !== fileName)
+        : [...previousActiveFileNames, fileName]
+
+      console.log('Current Active Files:', updatedActiveFileNames)
+
+      return updatedActiveFileNames
+    })
+  }
+
   return {
     messages,
     isGenerating,
     currentStreamingReply,
+    activeFileNames,
+    setActiveFileNames,
+    toggleFileSelection,
     askQuestion,
   }
 

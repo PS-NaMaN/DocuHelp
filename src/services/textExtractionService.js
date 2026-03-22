@@ -16,6 +16,7 @@ const SUPPORTED_FILE_EXTENSIONS = new Set(['pdf', 'md', 'markdown', 'txt'])
  *     pageNumber: number,
  *     totalPages: number,
  *   }) => void,
+ *   ocrScale?: number,
  * }} [options={}] - Optional PDF OCR progress callback.
  * @returns {Promise<string>} Normalized plain text extracted from the file.
  */
@@ -26,18 +27,21 @@ export async function extractTextFromFile(uploadedFile, options = {}) {
     validateSupportedFile(uploadedFile.name, fileExtension)
 
     if (fileExtension === 'pdf') {
-      return extractPdfText(uploadedFile, {
+      const extractedPdfText = await extractPdfText(uploadedFile, {
         onOcrProgress: options.onPdfOcrProgress,
+        ocrScale: options.ocrScale,
       })
+
+      return sanitizeExtractedText(extractedPdfText)
     }
 
     const rawFileText = await uploadedFile.text()
 
     if (fileExtension === 'txt') {
-      return normalizeWhitespace(rawFileText)
+      return sanitizeExtractedText(rawFileText)
     }
 
-    return extractMarkdownText(rawFileText)
+    return sanitizeExtractedText(extractMarkdownText(rawFileText))
   } catch (error) {
     logAndRethrow('extractTextFromFile', error, {
       fileName: uploadedFile.name,
@@ -163,4 +167,23 @@ function appendListItemText(textFragments, markdownToken) {
  */
 function normalizeWhitespace(rawText) {
   return rawText.replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
+/**
+ * Remove OCR and parsing artifacts before text is handed to chunking.
+ *
+ * @param {string} extractedText - Full extracted document text.
+ * @returns {string} Cleaned document text with empty fragments removed.
+ */
+function sanitizeExtractedText(extractedText) {
+  return extractedText
+    .replace(/\u200B/g, '')
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .split('\n')
+    .map((textLine) => textLine.trim())
+    .filter(Boolean)
+    .join('\n')
+    .trim()
 }

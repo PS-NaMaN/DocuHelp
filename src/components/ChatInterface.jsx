@@ -14,6 +14,9 @@ import { logFunctionError } from '../utils/logger'
  *   currentStreamingReply: string,
  *   isGenerating: boolean,
  *   isModelReady: boolean,
+ *   availableFileNames: string[],
+ *   activeFileNames: string[],
+ *   toggleFileSelection: (fileName: string) => void,
  *   onAskQuestion: (userQuery: string) => Promise<void>,
  * }} props - Chat messages, streaming state, and submit action.
  * @returns {JSX.Element} The chat workspace.
@@ -23,6 +26,9 @@ function ChatInterface({
   currentStreamingReply,
   isGenerating,
   isModelReady,
+  availableFileNames,
+  activeFileNames,
+  toggleFileSelection,
   onAskQuestion,
 }) {
   const [draftQuery, setDraftQuery] = useState('')
@@ -60,6 +66,9 @@ function ChatInterface({
         messageCount={messages.length}
         isGenerating={isGenerating}
         isModelReady={isModelReady}
+        availableFileNames={availableFileNames}
+        activeFileNames={activeFileNames}
+        toggleFileSelection={toggleFileSelection}
       />
 
       <div className="flex-1 overflow-y-auto px-5 py-5 md:px-6">
@@ -96,10 +105,20 @@ function ChatInterface({
  *   messageCount: number,
  *   isGenerating: boolean,
  *   isModelReady: boolean,
+ *   availableFileNames: string[],
+ *   activeFileNames: string[],
+ *   toggleFileSelection: (fileName: string) => void,
  * }} props - Summary state for the chat session.
  * @returns {JSX.Element} The chat header.
  */
-function ChatHeader({ messageCount, isGenerating, isModelReady }) {
+function ChatHeader({
+  messageCount,
+  isGenerating,
+  isModelReady,
+  availableFileNames,
+  activeFileNames,
+  toggleFileSelection,
+}) {
   return (
     <div className="border-b border-white/10 px-5 py-5 md:px-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -123,7 +142,73 @@ function ChatHeader({ messageCount, isGenerating, isModelReady }) {
           />
         </div>
       </div>
+
+      <DocumentSelector
+        availableFileNames={availableFileNames}
+        activeFileNames={activeFileNames}
+        toggleFileSelection={toggleFileSelection}
+      />
     </div>
+  )
+}
+
+/**
+ * Render the document selection pills used to scope retrieval.
+ *
+ * @param {{
+ *   availableFileNames: string[],
+ *   activeFileNames: string[],
+ *   toggleFileSelection: (fileName: string) => void,
+ * }} props - Available files, active selection, and click handler.
+ * @returns {JSX.Element | null} The selector row when files exist.
+ */
+function DocumentSelector({ availableFileNames, activeFileNames, toggleFileSelection }) {
+  if (!availableFileNames.length) {
+    return null
+  }
+
+  return (
+    <div className="mt-5">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-400">
+        Query Documents
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {availableFileNames.map((fileName) => (
+          <DocumentSelectorPill
+            key={fileName}
+            fileName={fileName}
+            isActive={activeFileNames.includes(fileName)}
+            toggleFileSelection={toggleFileSelection}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Render one file pill that toggles inclusion in the retrieval scope.
+ *
+ * @param {{
+ *   fileName: string,
+ *   isActive: boolean,
+ *   toggleFileSelection: (fileName: string) => void,
+ * }} props - One file selector pill.
+ * @returns {JSX.Element} One file pill.
+ */
+function DocumentSelectorPill({ fileName, isActive, toggleFileSelection }) {
+  return (
+    <button
+      type="button"
+      className={`rounded-full border px-3 py-2 text-xs font-semibold transition ${
+        isActive
+          ? 'border-cyan-300 bg-cyan-400/12 text-cyan-100'
+          : 'border-white/12 bg-white/5 text-stone-300 hover:border-white/20 hover:bg-white/8'
+      }`}
+      onClick={() => toggleFileSelection(fileName)}
+    >
+      {fileName}
+    </button>
   )
 }
 

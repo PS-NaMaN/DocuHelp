@@ -1,12 +1,13 @@
 import { GlobalWorkerOptions, getDocument, OPS } from 'pdfjs-dist'
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
-import { createOcrService } from './ocrService'
+import { createOcrService, renderPdfPageForOcr } from './ocrService'
 import { logAndRethrow } from '../utils/logger'
 
 GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 
 const MIN_DIGITAL_TEXT_CHARACTERS = 24
-const OCR_RENDER_SCALE = 2
+const MIN_EXTRACTED_WORDS_PER_PAGE = 10
+const ENABLE_EXTRACTION_AUDIT = true
 const IMAGE_OPERATOR_NAMES = [
   'paintImageMaskXObject',
   'paintImageMaskXObjectRepeat',
@@ -33,6 +34,7 @@ const IMAGE_OPERATOR_IDS = new Set(
  *     pageNumber: number,
  *     totalPages: number,
  *   }) => void,
+ *   ocrScale?: number,
  * }} [options={}] - Optional OCR progress streaming callback.
  * @returns {Promise<string>} Plain text extracted from the PDF.
  */
@@ -42,11 +44,12 @@ export async function extractPdfText(pdfFile, options = {}) {
   try {
     const pdfBuffer = await pdfFile.arrayBuffer()
     const pdfDocument = await getDocument({ data: pdfBuffer }).promise
-    const pageTexts = []
+    const extractedPageRecords = []
+    const extractionAuditRows = []
 
     for (let pageNumber = 1; pageNumber <= pdfDocument.numPages; pageNumber += 1) {
       const pageExtraction = await extractPageContent(pdfDocument, pageNumber)
-      const pageText = await resolvePageText({
+      const resolvedPageText = await resolvePageText({
         pdfPage: pageExtraction.pdfPage,
         digitalPageText: pageExtraction.digitalPageText,
         pageContainsImages: pageExtraction.pageContainsImages,
@@ -54,23 +57,35 @@ export async function extractPdfText(pdfFile, options = {}) {
         totalPages: pdfDocument.numPages,
         getOrCreateOcrService: async () => {
           if (!ocrService) {
-            ocrService = await createPdfOcrService(pdfDocument.numPages, options.onOcrProgress)
+            ocrService = await createPdfOcrService(
+              pdfDocument.numPages,
+              options.onOcrProgress,
+              options.ocrScale,
+            )
           }
 
           return ocrService
         },
+        ocrScale: options.ocrScale,
       })
+      const cleanedPageText = cleanExtractedPageText(resolvedPageText)
 
-      if (!pageText) {
+      auditExtractedPage(pageNumber, cleanedPageText, extractionAuditRows)
+
+      if (!cleanedPageText) {
         continue
       }
 
-      pageTexts.push(pageText)
+      extractedPageRecords.push({
+        pageNumber,
+        text: cleanedPageText,
+      })
     }
 
+    flushExtractionAuditTable(extractionAuditRows)
     await ocrService?.terminate()
 
-    return pageTexts.join('\n\n')
+    return concatenateExtractedPages(extractedPageRecords)
   } catch (error) {
     logAndRethrow('extractPdfText', error, {
       fileName: pdfFile.name,
@@ -123,6 +138,7 @@ async function extractPageContent(pdfDocument, pageNumber) {
  *   pageNumber: number,
  *   totalPages: number,
  *   getOrCreateOcrService: () => Promise<{ recognizeCanvas: (canvas: HTMLCanvasElement | OffscreenCanvas) => Promise<string> }>,
+ *   ocrScale?: number,
  * }} options - Page extraction context and OCR dependencies.
  * @returns {Promise<string>} The resolved page text, using OCR when needed.
  */
@@ -136,6 +152,7 @@ async function resolvePageText(options) {
       pageContainsImages,
       pageNumber,
       getOrCreateOcrService,
+      ocrScale = 2,
     } = options
 
     if (!shouldRunOcr(digitalPageText, pageContainsImages)) {
@@ -143,8 +160,8 @@ async function resolvePageText(options) {
     }
 
     const ocrService = await getOrCreateOcrService()
-    renderedCanvas = await renderPageToCanvas(pdfPage)
-
+    renderedCanvas = await renderPdfPageForOcr(pdfPage, ocrScale)
+    applyOcrPreprocessing(renderedCanvas)
     const ocrPageText = await ocrService.recognizeCanvas(renderedCanvas, pageNumber)
 
     return mergeDigitalAndOcrText(digitalPageText, ocrPageText)
@@ -209,13 +226,15 @@ function shouldRunOcr(digitalPageText, pageContainsImages) {
  *   pageNumber: number,
  *   totalPages: number,
  * }) => void) | undefined} onOcrProgress - Optional caller progress callback.
+ * @param {number | undefined} ocrScale - Requested OCR canvas render scale.
  * @returns {Promise<{ recognizeCanvas: (canvas: HTMLCanvasElement | OffscreenCanvas) => Promise<string>, terminate: () => Promise<void> }>} OCR helpers.
  */
-async function createPdfOcrService(totalPages, onOcrProgress) {
+async function createPdfOcrService(totalPages, onOcrProgress, ocrScale) {
   try {
     let activePageNumber = 1
 
     const ocrService = await createOcrService({
+      ocrScale,
       onProgress: (progressUpdate) => {
         onOcrProgress?.({
           ...progressUpdate,
@@ -235,51 +254,71 @@ async function createPdfOcrService(totalPages, onOcrProgress) {
   } catch (error) {
     logAndRethrow('createPdfOcrService', error, {
       totalPages,
+      ocrScale,
     })
   }
 }
 
 /**
- * Render one PDF page to an off-screen canvas for OCR.
+ * Convert a rendered page into a higher-contrast OCR input image.
  *
- * @param {import('pdfjs-dist/types/src/display/api').PDFPageProxy} pdfPage - PDF.js page instance to render.
- * @returns {Promise<HTMLCanvasElement>} Rendered off-screen canvas.
+ * @param {HTMLCanvasElement} renderedCanvas - Off-screen canvas containing the rendered PDF page.
+ * @returns {void}
  */
-async function renderPageToCanvas(pdfPage) {
+function applyOcrPreprocessing(renderedCanvas) {
   try {
-    const viewport = pdfPage.getViewport({ scale: OCR_RENDER_SCALE })
-    const offscreenCanvas = createOffscreenCanvas(viewport.width, viewport.height)
-    const renderingContext = offscreenCanvas.getContext('2d', { willReadFrequently: true })
+    const renderingContext = renderedCanvas.getContext('2d', { willReadFrequently: true })
 
     if (!renderingContext) {
-      throw new Error('Unable to create a 2D canvas context for OCR rendering.')
+      throw new Error('Unable to access the OCR preprocessing canvas context.')
     }
 
-    await pdfPage.render({
-      canvasContext: renderingContext,
-      viewport,
-    }).promise
+    const pageImageData = renderingContext.getImageData(
+      0,
+      0,
+      renderedCanvas.width,
+      renderedCanvas.height,
+    )
 
-    return offscreenCanvas
+    applyHighContrastBinarization(pageImageData.data)
+    renderingContext.putImageData(pageImageData, 0, 0)
   } catch (error) {
-    logAndRethrow('renderPageToCanvas', error)
+    logAndRethrow('applyOcrPreprocessing', error, {
+      canvasWidth: renderedCanvas.width,
+      canvasHeight: renderedCanvas.height,
+    })
   }
 }
 
 /**
- * Create an off-screen canvas in the browser.
+ * Convert RGBA image data to high-contrast grayscale for stronger OCR results.
  *
- * @param {number} width - Canvas width in pixels.
- * @param {number} height - Canvas height in pixels.
- * @returns {HTMLCanvasElement} Detached canvas element for page rendering.
+ * @param {Uint8ClampedArray} pixelData - Mutable RGBA pixel buffer from the rendered page.
+ * @returns {void}
  */
-function createOffscreenCanvas(width, height) {
-  const offscreenCanvas = document.createElement('canvas')
-  offscreenCanvas.width = Math.ceil(width)
-  offscreenCanvas.height = Math.ceil(height)
+function applyHighContrastBinarization(pixelData) {
+  try {
+    for (let pixelOffset = 0; pixelOffset < pixelData.length; pixelOffset += 4) {
+      const redChannel = pixelData[pixelOffset]
+      const greenChannel = pixelData[pixelOffset + 1]
+      const blueChannel = pixelData[pixelOffset + 2]
+      const grayscaleValue = Math.round(
+        redChannel * 0.299 + greenChannel * 0.587 + blueChannel * 0.114,
+      )
+      const binarizedValue = grayscaleValue > 170 ? 255 : 0
 
-  return offscreenCanvas
+      pixelData[pixelOffset] = binarizedValue
+      pixelData[pixelOffset + 1] = binarizedValue
+      pixelData[pixelOffset + 2] = binarizedValue
+      pixelData[pixelOffset + 3] = 255
+    }
+  } catch (error) {
+    logAndRethrow('applyHighContrastBinarization', error, {
+      pixelCount: pixelData.length / 4,
+    })
+  }
 }
+
 
 /**
  * Combine digital extraction and OCR text while avoiding obvious duplication.
@@ -306,6 +345,100 @@ function mergeDigitalAndOcrText(digitalPageText, ocrPageText) {
   }
 
   return `${digitalPageText}\n\n${ocrPageText}`.trim()
+}
+
+/**
+ * Remove OCR noise that should not survive into chunking.
+ *
+ * @param {string} pageText - Resolved digital and/or OCR page text.
+ * @returns {string} Clean page text ready for document concatenation.
+ */
+function cleanExtractedPageText(pageText) {
+  return pageText
+    .replace(/\u200B/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+}
+
+/**
+ * Record one page's extraction summary and warn on suspiciously small outputs.
+ *
+ * @param {number} pageNumber - One-based PDF page number.
+ * @param {string} extractedPageText - Final cleaned text for the page.
+ * @param {Array<{ 'Page Number': number, 'Word Count': number, Preview: string }>} extractedPageRecords - Mutable audit table rows.
+ * @returns {void}
+ */
+function auditExtractedPage(pageNumber, extractedPageText, extractedPageRecords) {
+  try {
+    if (!ENABLE_EXTRACTION_AUDIT) {
+      return
+    }
+
+    const extractedWordCount = countWords(extractedPageText)
+    const previewText = extractedPageText.slice(0, 50)
+
+    extractedPageRecords.push({
+      'Page Number': pageNumber,
+      'Word Count': extractedWordCount,
+      Preview: previewText,
+    })
+
+    if (extractedWordCount < MIN_EXTRACTED_WORDS_PER_PAGE) {
+      console.warn(`[DocuHelp] Page ${pageNumber} extraction suspect.`)
+    }
+  } catch (error) {
+    logAndRethrow('auditExtractedPage', error, {
+      pageNumber,
+    })
+  }
+}
+
+/**
+ * Flush the per-page extraction audit table to the browser console.
+ *
+ * @param {Array<{ 'Page Number': number, 'Word Count': number, Preview: string }>} extractedPageRecords - Audit rows collected during extraction.
+ * @returns {void}
+ */
+function flushExtractionAuditTable(extractedPageRecords) {
+  try {
+    if (!ENABLE_EXTRACTION_AUDIT || !extractedPageRecords.length) {
+      return
+    }
+
+    console.table(extractedPageRecords)
+  } catch (error) {
+    logAndRethrow('flushExtractionAuditTable', error, {
+      rowCount: extractedPageRecords.length,
+    })
+  }
+}
+
+/**
+ * Count visible words in extracted text for audit heuristics.
+ *
+ * @param {string} extractedPageText - Final cleaned page text.
+ * @returns {number} Approximate extracted word count.
+ */
+function countWords(extractedPageText) {
+  if (!extractedPageText) {
+    return 0
+  }
+
+  return extractedPageText.split(/\s+/).filter(Boolean).length
+}
+
+/**
+ * Join cleaned page text into one document-level plain text string.
+ *
+ * @param {Array<{ pageNumber?: number, text?: string }>} extractedPageRecords - Cleaned page records.
+ * @returns {string} Final concatenated PDF text ready for downstream cleaning.
+ */
+function concatenateExtractedPages(extractedPageRecords) {
+  return extractedPageRecords
+    .map((pageRecord) => pageRecord.text ?? '')
+    .filter(Boolean)
+    .join('\n\n')
 }
 
 /**

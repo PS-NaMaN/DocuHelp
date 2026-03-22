@@ -1,14 +1,23 @@
 import { useEffect, useState } from 'react'
+import ChatInterface from './components/ChatInterface'
+import LibraryModal from './components/LibraryModal'
+import ModelLoader from './components/ModelLoader'
+import SettingsModal from './components/SettingsModal'
+import { useLocalLLM } from './hooks/useLocalLLM'
+import { useRagQuery } from './hooks/useRagQuery'
+import { useSettings } from './hooks/useSettings'
 import { ingestDocuments } from './services/ingestionService'
 import {
   deleteAllIndexedData,
+  deleteDocumentByFileName,
   getStoredDocuments,
   getStorageSummary,
+  getUniqueStoredFiles,
 } from './services/libraryService'
-import { useLocalLLM } from './hooks/useLocalLLM'
-import { useRagQuery } from './hooks/useRagQuery'
-import ChatInterface from './components/ChatInterface'
-import ModelLoader from './components/ModelLoader'
+import {
+  DEFAULT_WEB_LLM_MODEL_ID,
+  getActiveModelId,
+} from './services/llmService'
 
 const ACCEPTED_FILE_TYPES =
   '.pdf,.md,.markdown,.txt,text/plain,application/pdf,text/markdown'
@@ -22,18 +31,22 @@ const INITIAL_PROGRESS_STATE = {
 }
 
 /**
- * Render the DocuHelp Phase 1 workspace and coordinate ingestion state.
+ * Render the DocuHelp application shell and coordinate ingestion, retrieval, and settings state.
  *
  * @returns {JSX.Element} The main application shell.
  */
 function App() {
   const [storedDocuments, setStoredDocuments] = useState([])
+  const [availableFileNames, setAvailableFileNames] = useState([])
   const [storageSummary, setStorageSummary] = useState({ documentCount: 0, chunkCount: 0 })
   const [isIngestingDocuments, setIsIngestingDocuments] = useState(false)
   const [isDeletingIndexedData, setIsDeletingIndexedData] = useState(false)
+  const [deletingDocumentFileName, setDeletingDocumentFileName] = useState('')
+  const [isChangingModel, setIsChangingModel] = useState(false)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [ingestionProgress, setIngestionProgress] = useState(INITIAL_PROGRESS_STATE)
   const [errorMessage, setErrorMessage] = useState('')
+  const { ocrScale, setOcrScale } = useSettings()
   const {
     engine,
     isSupported: isLocalLlmSupported,
@@ -48,12 +61,29 @@ function App() {
     messages,
     isGenerating,
     currentStreamingReply,
+    activeFileNames,
+    setActiveFileNames,
+    toggleFileSelection,
     askQuestion,
   } = useRagQuery({ engine })
 
   useEffect(() => {
-    void refreshLibraryState()
-  }, [])
+    async function loadInitialLibraryState() {
+      const librarySnapshot = await loadLibrarySnapshot()
+
+      setStoredDocuments(librarySnapshot.documents)
+      setAvailableFileNames(librarySnapshot.uniqueFileNames)
+      setStorageSummary(librarySnapshot.summary)
+      setActiveFileNames((previousActiveFileNames) =>
+        syncActiveFileNamesWithAvailableFiles(
+          previousActiveFileNames,
+          librarySnapshot.uniqueFileNames,
+        ),
+      )
+    }
+
+    void loadInitialLibraryState()
+  }, [setActiveFileNames])
 
   /**
    * Reload the locally stored document list and summary counts from IndexedDB.
@@ -64,7 +94,11 @@ function App() {
     const librarySnapshot = await loadLibrarySnapshot()
 
     setStoredDocuments(librarySnapshot.documents)
+    setAvailableFileNames(librarySnapshot.uniqueFileNames)
     setStorageSummary(librarySnapshot.summary)
+    setActiveFileNames((previousActiveFileNames) =>
+      syncActiveFileNamesWithAvailableFiles(previousActiveFileNames, librarySnapshot.uniqueFileNames),
+    )
   }
 
   /**
@@ -83,13 +117,13 @@ function App() {
     beginIngestion(selectedFiles)
 
     try {
-      await ingestDocuments(selectedFiles, setIngestionProgress)
+      await ingestDocuments(selectedFiles, setIngestionProgress, {
+        ocrScale,
+      })
       await refreshLibraryState()
       setIngestionProgress(createCompletedProgressState(selectedFiles.length))
     } catch (ingestionError) {
-      const readableErrorMessage = getErrorMessage(ingestionError, 'Ingestion failed.')
-
-      setErrorMessage(readableErrorMessage)
+      setErrorMessage(getErrorMessage(ingestionError, 'Ingestion failed.'))
       setIngestionProgress(createErroredProgressState(selectedFiles.length))
     } finally {
       setIsIngestingDocuments(false)
@@ -112,6 +146,7 @@ function App() {
 
     try {
       await deleteAllIndexedData()
+      setActiveFileNames([])
       await refreshLibraryState()
       setIngestionProgress(createDeletedProgressState())
       closeSettingsModal()
@@ -119,6 +154,53 @@ function App() {
       setErrorMessage(getErrorMessage(deleteError, 'Unable to delete indexed data.'))
     } finally {
       setIsDeletingIndexedData(false)
+    }
+  }
+
+  /**
+   * Delete one indexed document after a browser confirmation prompt.
+   *
+   * @param {string} fileName - File name whose local chunks should be removed.
+   * @returns {Promise<void>} Resolves when the document deletion flow finishes.
+   */
+  async function handleDeleteDocument(fileName) {
+    if (!shouldDeleteDocument(fileName)) {
+      return
+    }
+
+    setDeletingDocumentFileName(fileName)
+    setErrorMessage('')
+
+    try {
+      await deleteDocumentByFileName(fileName)
+      setActiveFileNames((previousActiveFileNames) =>
+        previousActiveFileNames.filter((activeFileName) => activeFileName !== fileName),
+      )
+      await refreshLibraryState()
+    } catch (deleteError) {
+      setErrorMessage(getErrorMessage(deleteError, `Unable to delete ${fileName}.`))
+    } finally {
+      setDeletingDocumentFileName('')
+    }
+  }
+
+  /**
+   * Initialize a different local model from the settings modal.
+   *
+   * @param {string} modelId - Requested WebLLM model id.
+   * @returns {Promise<void>} Resolves when the selected model finishes loading or fails.
+   */
+  async function handleChangeModel(modelId) {
+    if (!modelId) {
+      return
+    }
+
+    setIsChangingModel(true)
+
+    try {
+      await initializeModel(modelId)
+    } finally {
+      setIsChangingModel(false)
     }
   }
 
@@ -165,7 +247,9 @@ function App() {
             progressPercentage={progressPercentage}
             errorMessage={errorMessage}
             isIngestingDocuments={isIngestingDocuments}
+            deletingDocumentFileName={deletingDocumentFileName}
             onFileUpload={handleFileUpload}
+            onDeleteDocument={handleDeleteDocument}
             onOpenSettings={openSettingsModal}
           />
           <MainWorkspace
@@ -179,6 +263,9 @@ function App() {
             messages={messages}
             isGenerating={isGenerating}
             currentStreamingReply={currentStreamingReply}
+            availableFileNames={availableFileNames}
+            activeFileNames={activeFileNames}
+            toggleFileSelection={toggleFileSelection}
             onAskQuestion={askQuestion}
           />
         </div>
@@ -187,8 +274,14 @@ function App() {
       {isSettingsModalOpen ? (
         <SettingsModal
           isDeletingIndexedData={isDeletingIndexedData}
+          isChangingModel={isChangingModel}
+          currentModelId={getActiveModelId() ?? DEFAULT_WEB_LLM_MODEL_ID}
+          availableModelIds={[DEFAULT_WEB_LLM_MODEL_ID]}
+          ocrScale={ocrScale}
           onClose={closeSettingsModal}
           onDeleteIndexedData={handleDeleteIndexedData}
+          onChangeOcrScale={setOcrScale}
+          onChangeModel={handleChangeModel}
         />
       ) : null}
     </div>
@@ -198,12 +291,16 @@ function App() {
 /**
  * Fetch the current document list and summary counts in parallel.
  *
- * @returns {Promise<{ documents: Array<Record<string, unknown>>, summary: { documentCount: number, chunkCount: number } }>} Current library snapshot.
+ * @returns {Promise<{ documents: Array<Record<string, unknown>>, uniqueFileNames: string[], summary: { documentCount: number, chunkCount: number } }>} Current library snapshot.
  */
 async function loadLibrarySnapshot() {
-  const [documents, summary] = await Promise.all([getStoredDocuments(), getStorageSummary()])
+  const [documents, uniqueFileNames, summary] = await Promise.all([
+    getStoredDocuments(),
+    getUniqueStoredFiles(),
+    getStorageSummary(),
+  ])
 
-  return { documents, summary }
+  return { documents, uniqueFileNames, summary }
 }
 
 /**
@@ -306,6 +403,33 @@ function shouldDeleteIndexedData() {
 }
 
 /**
+ * Ask the browser for final confirmation before deleting one local document index.
+ *
+ * @param {string} fileName - File name targeted for deletion.
+ * @returns {boolean} True when the user confirms deletion.
+ */
+function shouldDeleteDocument(fileName) {
+  return window.confirm(
+    `Delete the indexed data for "${fileName}" from this browser on this site?`,
+  )
+}
+
+/**
+ * Keep active file filters aligned with the current stored document list.
+ *
+ * @param {string[]} previousActiveFileNames - Previously selected active file names.
+ * @param {string[]} availableFileNames - Current file names available for retrieval.
+ * @returns {string[]} Active file names that still exist, or all stored files when no selection exists yet.
+ */
+function syncActiveFileNamesWithAvailableFiles(previousActiveFileNames, availableFileNames) {
+  if (!previousActiveFileNames.length) {
+    return availableFileNames
+  }
+
+  return previousActiveFileNames.filter((activeFileName) => availableFileNames.includes(activeFileName))
+}
+
+/**
  * Render the left sidebar with upload, status, library, and settings controls.
  *
  * @param {{
@@ -315,7 +439,9 @@ function shouldDeleteIndexedData() {
  *   progressPercentage: number,
  *   errorMessage: string,
  *   isIngestingDocuments: boolean,
+ *   deletingDocumentFileName: string,
  *   onFileUpload: (event: { target: HTMLInputElement }) => Promise<void>,
+ *   onDeleteDocument: (fileName: string) => Promise<void>,
  *   onOpenSettings: () => void,
  * }} props - Sidebar display and event props.
  * @returns {JSX.Element} The sidebar panel.
@@ -327,7 +453,9 @@ function Sidebar({
   progressPercentage,
   errorMessage,
   isIngestingDocuments,
+  deletingDocumentFileName,
   onFileUpload,
+  onDeleteDocument,
   onOpenSettings,
 }) {
   return (
@@ -345,7 +473,11 @@ function Sidebar({
           storageSummary={storageSummary}
           errorMessage={errorMessage}
         />
-        <LibraryPanel storedDocuments={storedDocuments} />
+        <LibraryModal
+          storedDocuments={storedDocuments}
+          deletingFileName={deletingDocumentFileName}
+          onDeleteDocument={onDeleteDocument}
+        />
         <SettingsButton onOpenSettings={onOpenSettings} />
       </div>
     </aside>
@@ -462,71 +594,6 @@ function StatusPanel({
 }
 
 /**
- * Render the locally indexed document list.
- *
- * @param {{ storedDocuments: Array<Record<string, unknown>> }} props - Stored document list.
- * @returns {JSX.Element} The library panel.
- */
-function LibraryPanel({ storedDocuments }) {
-  return (
-    <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-stone-900">Library</p>
-        <p className="text-xs uppercase tracking-[0.22em] text-stone-400">IndexedDB</p>
-      </div>
-
-      <div className="mt-4 space-y-3">
-        {storedDocuments.length ? (
-          storedDocuments.map((storedDocument) => (
-            <LibraryDocumentCard key={storedDocument.id} storedDocument={storedDocument} />
-          ))
-        ) : (
-          <EmptyLibraryState />
-        )}
-      </div>
-    </section>
-  )
-}
-
-/**
- * Render a single indexed document card in the library.
- *
- * @param {{ storedDocument: { id: number, name: string, extension: string, chunkCount: number, embeddingDimensions: number } }} props - Indexed document metadata.
- * @returns {JSX.Element} A document card row.
- */
-function LibraryDocumentCard({ storedDocument }) {
-  return (
-    <article className="rounded-[1.2rem] border border-stone-200 bg-stone-50 px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium text-stone-900">{storedDocument.name}</p>
-          <p className="mt-1 text-xs uppercase tracking-[0.18em] text-stone-500">
-            {storedDocument.extension} / {storedDocument.chunkCount} chunks
-          </p>
-        </div>
-        <span className="rounded-full bg-white px-2 py-1 text-xs font-semibold text-stone-500">
-          {storedDocument.embeddingDimensions}d
-        </span>
-      </div>
-    </article>
-  )
-}
-
-/**
- * Render the empty state shown before any documents have been indexed.
- *
- * @returns {JSX.Element} The empty library placeholder.
- */
-function EmptyLibraryState() {
-  return (
-    <div className="rounded-[1.2rem] border border-dashed border-stone-200 px-4 py-5 text-sm leading-6 text-stone-500">
-      No local documents yet. Upload a file to run extraction, chunking, embedding, and
-      persistence entirely in the browser.
-    </div>
-  )
-}
-
-/**
  * Render the sidebar settings launcher.
  *
  * @param {{ onOpenSettings: () => void }} props - Settings open handler.
@@ -541,7 +608,7 @@ function SettingsButton({ onOpenSettings }) {
     >
       <div>
         <p className="text-sm font-semibold text-stone-900">Settings</p>
-        <p className="mt-1 text-sm text-stone-500">Manage local indexed data stored by this site.</p>
+        <p className="mt-1 text-sm text-stone-500">Manage OCR, local models, and indexed data.</p>
       </div>
       <span className="rounded-full bg-stone-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">
         Open
@@ -551,7 +618,7 @@ function SettingsButton({ onOpenSettings }) {
 }
 
 /**
- * Render the placeholder main workspace for later query phases.
+ * Render the main workspace including chat and model loader panels.
  *
  * @param {{
  *   isLocalLlmSupported: boolean | null,
@@ -569,8 +636,11 @@ function SettingsButton({ onOpenSettings }) {
  *   }>,
  *   isGenerating: boolean,
  *   currentStreamingReply: string,
+ *   availableFileNames: string[],
+ *   activeFileNames: string[],
+ *   toggleFileSelection: (fileName: string) => void,
  *   onAskQuestion: (userQuery: string) => Promise<void>,
- * }} props - Model loader state and actions for Phase 2.
+ * }} props - Model loader state and query state for the main workspace.
  * @returns {JSX.Element} The main content panel.
  */
 function MainWorkspace({
@@ -584,6 +654,9 @@ function MainWorkspace({
   messages,
   isGenerating,
   currentStreamingReply,
+  availableFileNames,
+  activeFileNames,
+  toggleFileSelection,
   onAskQuestion,
 }) {
   const showInitializeButton =
@@ -606,6 +679,9 @@ function MainWorkspace({
           currentStreamingReply={currentStreamingReply}
           isGenerating={isGenerating}
           isModelReady={isLocalLlmReady}
+          availableFileNames={availableFileNames}
+          activeFileNames={activeFileNames}
+          toggleFileSelection={toggleFileSelection}
           onAskQuestion={onAskQuestion}
         />
 
@@ -645,63 +721,6 @@ function MainWorkspace({
         </section>
       </div>
     </main>
-  )
-}
-
-/**
- * Render the settings modal for destructive local data actions.
- *
- * @param {{
- *   isDeletingIndexedData: boolean,
- *   onClose: () => void,
- *   onDeleteIndexedData: () => Promise<void>,
- * }} props - Settings modal action props.
- * @returns {JSX.Element} The modal overlay.
- */
-function SettingsModal({ isDeletingIndexedData, onClose, onDeleteIndexedData }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/55 px-4 py-6 backdrop-blur-sm">
-      <div className="w-full max-w-xl rounded-[2rem] border border-stone-200 bg-white p-6 shadow-[0_30px_120px_rgba(28,25,23,0.22)]">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
-              Settings
-            </p>
-            <h3 className="mt-3 font-serif text-3xl leading-tight text-stone-950">
-              Local indexed data
-            </h3>
-            <p className="mt-3 text-sm leading-6 text-stone-600">
-              Delete all document chunks and embeddings saved by DocuHelp in this browser for
-              this site only.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="rounded-full border border-stone-200 px-3 py-2 text-sm font-medium text-stone-500 transition hover:border-stone-300 hover:text-stone-700"
-            onClick={onClose}
-            disabled={isDeletingIndexedData}
-          >
-            Close
-          </button>
-        </div>
-
-        <div className="mt-6 rounded-[1.5rem] border border-rose-200 bg-rose-50 p-5">
-          <p className="text-sm font-semibold text-rose-900">Delete indexed data</p>
-          <p className="mt-2 text-sm leading-6 text-rose-800/85">
-            This clears all uploaded document records, chunks, and embeddings stored in
-            IndexedDB by this site. It does not affect files outside this browser.
-          </p>
-          <button
-            type="button"
-            className="mt-4 rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
-            onClick={onDeleteIndexedData}
-            disabled={isDeletingIndexedData}
-          >
-            {isDeletingIndexedData ? 'Deleting...' : 'Delete all indexed data'}
-          </button>
-        </div>
-      </div>
-    </div>
   )
 }
 

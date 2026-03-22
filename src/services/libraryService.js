@@ -1,4 +1,10 @@
-import { clearIndexedData, getAllChunks, getAllDocuments } from './db'
+import {
+  clearIndexedData,
+  deleteDocumentChunks,
+  getAllChunks,
+  getAllDocuments,
+  getUniqueFiles,
+} from './indexedDBService'
 
 /**
  * Return stored documents ordered from newest to oldest ingestion time.
@@ -26,12 +32,31 @@ export async function getStorageSummary() {
 }
 
 /**
+ * Return the unique uploaded file names currently available for retrieval selection.
+ *
+ * @returns {Promise<string[]>} Flat array of unique file names.
+ */
+export async function getUniqueStoredFiles() {
+  return getUniqueFiles()
+}
+
+/**
  * Delete all locally indexed data created by this application.
  *
  * @returns {Promise<void>} Resolves when the local index has been cleared.
  */
 export async function deleteAllIndexedData() {
   await clearIndexedData()
+}
+
+/**
+ * Delete all locally indexed records tied to one uploaded file name.
+ *
+ * @param {string} fileName - File name whose chunks and document metadata should be removed.
+ * @returns {Promise<void>} Resolves when the file has been removed from local storage.
+ */
+export async function deleteDocumentByFileName(fileName) {
+  await deleteDocumentChunks(fileName)
 }
 
 /**

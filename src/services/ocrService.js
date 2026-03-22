@@ -3,12 +3,14 @@ import { logAndRethrow } from '../utils/logger'
 
 const DEFAULT_OCR_LANGUAGE = 'eng'
 const DEFAULT_OCR_ENGINE_MODE = 1
+const DEFAULT_OCR_SCALE = 2
 
 /**
  * Create a document-scoped OCR service backed by a dedicated Tesseract worker.
  *
  * @param {{
  *   language?: string,
+ *   ocrScale?: number,
  *   onProgress?: (progress: {
  *     stage: 'ocr',
  *     status: string,
@@ -22,7 +24,7 @@ const DEFAULT_OCR_ENGINE_MODE = 1
  */
 export async function createOcrService(options = {}) {
   try {
-    const { language = DEFAULT_OCR_LANGUAGE, onProgress } = options
+    const { language = DEFAULT_OCR_LANGUAGE, onProgress, ocrScale = DEFAULT_OCR_SCALE } = options
     const ocrWorker = await createWorker(language, DEFAULT_OCR_ENGINE_MODE, {
       logger: (message) => reportOcrProgress(onProgress, message),
     })
@@ -30,10 +32,42 @@ export async function createOcrService(options = {}) {
     return {
       recognizeCanvas: async (canvas) => recognizeCanvas(ocrWorker, canvas),
       terminate: async () => terminateWorker(ocrWorker),
+      ocrScale,
     }
   } catch (error) {
     logAndRethrow('createOcrService', error, {
       language: options.language ?? DEFAULT_OCR_LANGUAGE,
+      ocrScale: options.ocrScale ?? DEFAULT_OCR_SCALE,
+    })
+  }
+}
+
+/**
+ * Render a PDF page to a detached canvas using the requested OCR scale.
+ *
+ * @param {import('pdfjs-dist/types/src/display/api').PDFPageProxy} pdfPage - PDF.js page instance to render.
+ * @param {number} [ocrScale=DEFAULT_OCR_SCALE] - Requested upscaling factor for OCR rendering.
+ * @returns {Promise<HTMLCanvasElement>} Rendered detached canvas ready for OCR preprocessing.
+ */
+export async function renderPdfPageForOcr(pdfPage, ocrScale = DEFAULT_OCR_SCALE) {
+  try {
+    const viewport = pdfPage.getViewport({ scale: normalizeOcrScale(ocrScale) })
+    const offscreenCanvas = createOffscreenCanvas(viewport.width, viewport.height)
+    const renderingContext = offscreenCanvas.getContext('2d', { willReadFrequently: true })
+
+    if (!renderingContext) {
+      throw new Error('Unable to create a 2D canvas context for OCR rendering.')
+    }
+
+    await pdfPage.render({
+      canvasContext: renderingContext,
+      viewport,
+    }).promise
+
+    return offscreenCanvas
+  } catch (error) {
+    logAndRethrow('renderPdfPageForOcr', error, {
+      ocrScale,
     })
   }
 }
@@ -96,4 +130,33 @@ async function terminateWorker(ocrWorker) {
   } catch (error) {
     logAndRethrow('terminateWorker', error)
   }
+}
+
+/**
+ * Clamp OCR scale input to a safe numeric range for canvas rendering.
+ *
+ * @param {number} rawOcrScale - Requested OCR scale value.
+ * @returns {number} Safe OCR render scale.
+ */
+function normalizeOcrScale(rawOcrScale) {
+  if (!Number.isFinite(rawOcrScale)) {
+    return DEFAULT_OCR_SCALE
+  }
+
+  return Math.max(0.5, Math.min(5, rawOcrScale))
+}
+
+/**
+ * Create an off-screen canvas in the browser.
+ *
+ * @param {number} width - Canvas width in pixels.
+ * @param {number} height - Canvas height in pixels.
+ * @returns {HTMLCanvasElement} Detached canvas element for page rendering.
+ */
+function createOffscreenCanvas(width, height) {
+  const offscreenCanvas = document.createElement('canvas')
+  offscreenCanvas.width = Math.ceil(width)
+  offscreenCanvas.height = Math.ceil(height)
+
+  return offscreenCanvas
 }

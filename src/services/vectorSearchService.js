@@ -50,16 +50,22 @@ export function computeCosineSimilarity(vectorA, vectorB) {
  *   citationLabel: string,
  * }>>} Ranked chunk search results.
  */
-export async function searchSimilarChunks(queryVector, topK = 5) {
+export async function searchSimilarChunks(queryVector, topK = 5, activeFileNames = []) {
   try {
     if (!queryVector.length || topK <= 0) {
       return []
     }
 
+    if (Array.isArray(activeFileNames) && !activeFileNames.length) {
+      return []
+    }
+
     const [storedChunks, storedDocuments] = await Promise.all([getAllChunks(), getAllDocuments()])
     const documentNameById = createDocumentNameLookup(storedDocuments)
+    const activeFileNameSet = createActiveFileNameSet(activeFileNames)
     const rankedChunks = storedChunks
       .filter((storedChunk) => isComparableChunk(storedChunk, queryVector))
+      .filter((storedChunk) => isChunkActive(storedChunk, documentNameById, activeFileNameSet))
       .map((storedChunk) => createRankedChunkResult(storedChunk, queryVector, documentNameById))
       .sort(sortBySimilarityDescending)
 
@@ -68,8 +74,19 @@ export async function searchSimilarChunks(queryVector, topK = 5) {
     logAndRethrow('searchSimilarChunks', error, {
       topK,
       queryVectorLength: queryVector.length,
+      activeFileCount: activeFileNames.length,
     })
   }
+}
+
+/**
+ * Convert active file names into a fast lookup set.
+ *
+ * @param {string[]} activeFileNames - File names currently enabled for retrieval.
+ * @returns {Set<string>} Lookup set for file-scoped retrieval.
+ */
+function createActiveFileNameSet(activeFileNames) {
+  return new Set(activeFileNames.filter(Boolean))
 }
 
 /**
@@ -119,6 +136,24 @@ function isComparableChunk(storedChunk, queryVector) {
 }
 
 /**
+ * Check whether a chunk belongs to the currently active file filter set.
+ *
+ * @param {{ fileName?: string, documentId: number }} storedChunk - Stored chunk record.
+ * @param {Map<number, string>} documentNameById - Document name lookup map.
+ * @param {Set<string>} activeFileNameSet - Selected active file names.
+ * @returns {boolean} True when the chunk should remain eligible for retrieval.
+ */
+function isChunkActive(storedChunk, documentNameById, activeFileNameSet) {
+  if (!activeFileNameSet.size) {
+    return true
+  }
+
+  const chunkFileName = storedChunk.fileName ?? documentNameById.get(storedChunk.documentId) ?? ''
+
+  return activeFileNameSet.has(chunkFileName)
+}
+
+/**
  * Convert a raw chunk record into a ranked search result with similarity metadata.
  *
  * @param {{
@@ -143,7 +178,8 @@ function isComparableChunk(storedChunk, queryVector) {
  * }} Ranked search result.
  */
 function createRankedChunkResult(storedChunk, queryVector, documentNameById) {
-  const documentName = documentNameById.get(storedChunk.documentId) ?? 'Unknown document'
+  const documentName =
+    storedChunk.fileName ?? documentNameById.get(storedChunk.documentId) ?? 'Unknown document'
   const similarity = computeCosineSimilarity(queryVector, storedChunk.embedding)
 
   return {

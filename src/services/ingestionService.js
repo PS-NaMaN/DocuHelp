@@ -1,4 +1,4 @@
-import { replaceChunksForDocument, saveDocument } from './db'
+import { replaceChunksForDocument, saveDocument } from './indexedDBService'
 import { extractTextFromFile, getFileExtension } from './textExtractionService'
 import { chunkText } from '../utils/chunkText'
 import { logAndRethrow } from '../utils/logger'
@@ -14,9 +14,10 @@ import { logAndRethrow } from '../utils/logger'
  *   total: number,
  *   message: string,
  * }) => void} [reportProgress] - Optional callback for UI progress updates.
+ * @param {{ ocrScale?: number }} [settings={}] - User-configurable ingestion settings.
  * @returns {Promise<void>} Resolves after every file has been processed and stored.
  */
-export async function ingestDocuments(uploadedFiles, reportProgress) {
+export async function ingestDocuments(uploadedFiles, reportProgress, settings = {}) {
   try {
     const { generateEmbeddings } = await import('./embeddingService')
 
@@ -27,6 +28,7 @@ export async function ingestDocuments(uploadedFiles, reportProgress) {
         fileIndex,
         uploadedFiles.length,
         reportProgress,
+        settings,
       )
 
       const chunkRecords = createAndValidateChunks(extractedDocumentText, uploadedFile.name)
@@ -51,6 +53,7 @@ export async function ingestDocuments(uploadedFiles, reportProgress) {
   } catch (error) {
     logAndRethrow('ingestDocuments', error, {
       fileCount: uploadedFiles.length,
+      ocrScale: settings.ocrScale,
     })
   }
 }
@@ -62,9 +65,10 @@ export async function ingestDocuments(uploadedFiles, reportProgress) {
  * @param {number} fileIndex - Zero-based file index in the current batch.
  * @param {number} totalFiles - Total files in the current batch.
  * @param {Function | undefined} reportProgress - Optional UI progress callback.
+ * @param {{ ocrScale?: number }} settings - User-configurable ingestion settings.
  * @returns {Promise<string>} Extracted plain text ready for chunking.
  */
-async function extractAndValidateText(uploadedFile, fileIndex, totalFiles, reportProgress) {
+async function extractAndValidateText(uploadedFile, fileIndex, totalFiles, reportProgress, settings) {
   reportStageProgress(reportProgress, {
     stage: 'extracting',
     fileName: uploadedFile.name,
@@ -83,6 +87,7 @@ async function extractAndValidateText(uploadedFile, fileIndex, totalFiles, repor
         message: createOcrProgressMessage(uploadedFile.name, ocrProgress),
       })
     },
+    ocrScale: settings.ocrScale,
   })
 
   if (extractedDocumentText) {
@@ -100,7 +105,10 @@ async function extractAndValidateText(uploadedFile, fileIndex, totalFiles, repor
  * @returns {Array<{ index: number, text: string, tokenCount: number }>} Chunk records ready for embeddings.
  */
 function createAndValidateChunks(extractedDocumentText, fileName) {
-  const chunkRecords = chunkText(extractedDocumentText)
+  const chunkRecords = chunkText(extractedDocumentText).map((chunkRecord) => ({
+    ...chunkRecord,
+    fileName,
+  }))
 
   if (chunkRecords.length) {
     return chunkRecords
@@ -230,6 +238,7 @@ function createStoredDocumentRecord(uploadedFile, chunkRecords, embeddingVectors
 function createPersistedChunkRecords(documentId, chunkRecords, embeddingVectors) {
   return chunkRecords.map((chunkRecord, chunkIndex) => ({
     documentId,
+    fileName: chunkRecord.fileName,
     chunkIndex,
     text: chunkRecord.text,
     tokenCount: chunkRecord.tokenCount,
