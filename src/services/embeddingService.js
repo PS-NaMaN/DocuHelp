@@ -43,6 +43,26 @@ export async function generateEmbeddings(textChunks, reportProgress) {
 }
 
 /**
+ * Generate a single embedding vector for a query or standalone text input.
+ *
+ * @param {string} textInput - Input text to embed.
+ * @returns {Promise<Float32Array>} One normalized embedding vector.
+ */
+export async function generateEmbedding(textInput) {
+  if (!textInput.trim()) {
+    return new Float32Array()
+  }
+
+  const featureExtractor = await getFeatureExtractor()
+  const embeddingOutput = await featureExtractor(textInput, {
+    pooling: 'mean',
+    normalize: true,
+  })
+
+  return Float32Array.from(embeddingOutput.data)
+}
+
+/**
  * Probe the embedding dimensionality exposed by the configured model.
  *
  * @returns {Promise<number>} Length of a single embedding vector.

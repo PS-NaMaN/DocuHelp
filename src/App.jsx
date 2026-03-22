@@ -6,6 +6,8 @@ import {
   getStorageSummary,
 } from './services/libraryService'
 import { useLocalLLM } from './hooks/useLocalLLM'
+import { useRagQuery } from './hooks/useRagQuery'
+import ChatInterface from './components/ChatInterface'
 import ModelLoader from './components/ModelLoader'
 
 const ACCEPTED_FILE_TYPES =
@@ -33,6 +35,7 @@ function App() {
   const [ingestionProgress, setIngestionProgress] = useState(INITIAL_PROGRESS_STATE)
   const [errorMessage, setErrorMessage] = useState('')
   const {
+    engine,
     isSupported: isLocalLlmSupported,
     isLoading: isLocalLlmLoading,
     progressText: localLlmProgressText,
@@ -41,6 +44,12 @@ function App() {
     errorMessage: localLlmErrorMessage,
     initializeModel,
   } = useLocalLLM()
+  const {
+    messages,
+    isGenerating,
+    currentStreamingReply,
+    askQuestion,
+  } = useRagQuery({ engine })
 
   useEffect(() => {
     void refreshLibraryState()
@@ -167,6 +176,10 @@ function App() {
             isLocalLlmReady={isLocalLlmReady}
             localLlmErrorMessage={localLlmErrorMessage}
             onInitializeModel={initializeModel}
+            messages={messages}
+            isGenerating={isGenerating}
+            currentStreamingReply={currentStreamingReply}
+            onAskQuestion={askQuestion}
           />
         </div>
       </div>
@@ -548,6 +561,15 @@ function SettingsButton({ onOpenSettings }) {
  *   isLocalLlmReady: boolean,
  *   localLlmErrorMessage: string,
  *   onInitializeModel: () => Promise<unknown>,
+ *   messages: Array<{
+ *     id: string,
+ *     role: 'user' | 'assistant',
+ *     content: string,
+ *     citations?: Array<{ citationLabel: string, similarity: number }>,
+ *   }>,
+ *   isGenerating: boolean,
+ *   currentStreamingReply: string,
+ *   onAskQuestion: (userQuery: string) => Promise<void>,
  * }} props - Model loader state and actions for Phase 2.
  * @returns {JSX.Element} The main content panel.
  */
@@ -559,6 +581,10 @@ function MainWorkspace({
   isLocalLlmReady,
   localLlmErrorMessage,
   onInitializeModel,
+  messages,
+  isGenerating,
+  currentStreamingReply,
+  onAskQuestion,
 }) {
   const showInitializeButton =
     isLocalLlmSupported === true && !isLocalLlmLoading && !isLocalLlmReady
@@ -570,28 +596,18 @@ function MainWorkspace({
           Retrieval Workspace
         </p>
         <h2 className="mt-3 max-w-2xl font-serif text-3xl leading-tight text-white">
-          Query and citation flow comes next once the local knowledge base is ready.
+          Chat with your local document index, stream grounded answers, and inspect the cited sources.
         </h2>
       </div>
 
       <div className="grid flex-1 gap-4 p-6 lg:grid-cols-[1.4fr_0.9fr]">
-        <section className="rounded-[1.6rem] border border-white/10 bg-white/5 p-5">
-          <p className="text-sm font-semibold text-white">Future chat panel</p>
-          <div className="mt-4 flex h-full min-h-[320px] flex-col justify-between rounded-[1.3rem] border border-dashed border-white/12 bg-black/10 p-5">
-            <div>
-              <p className="text-sm text-stone-300">
-                Phase 1 stores chunked embeddings locally. Phase 2 now checks WebGPU support,
-                downloads the selected WebLLM model, and prepares the browser for fully local
-                inference.
-              </p>
-            </div>
-            <div className="grid gap-3 text-sm text-stone-400 md:grid-cols-3">
-              <PlaceholderTile title="Phase 2" body="WebGPU model loading and fallback UX" />
-              <PlaceholderTile title="Phase 3" body="Similarity search and prompt assembly" />
-              <PlaceholderTile title="Phase 4" body="Chat polish, citations, deployment" />
-            </div>
-          </div>
-        </section>
+        <ChatInterface
+          messages={messages}
+          currentStreamingReply={currentStreamingReply}
+          isGenerating={isGenerating}
+          isModelReady={isLocalLlmReady}
+          onAskQuestion={onAskQuestion}
+        />
 
         <section className="space-y-4 rounded-[1.6rem] border border-white/10 bg-[linear-gradient(180deg,_rgba(8,145,178,0.08),_rgba(255,255,255,0.03))] p-5">
           <div className="flex items-center justify-between gap-3">
@@ -623,6 +639,7 @@ function MainWorkspace({
             <InfoPill label="Chunking" value="~400 token windows with 50 token overlap" />
             <InfoPill label="Embeddings" value="transformers.js MiniLM vectors in browser cache" />
             <InfoPill label="Local LLM" value="WebLLM engine cached and compiled with WebGPU" />
+            <InfoPill label="Retrieval" value="Cosine similarity over Float32Array chunk embeddings" />
             <InfoPill label="Storage" value="IndexedDB survives refresh with chunk metadata" />
           </div>
         </section>
@@ -699,21 +716,6 @@ function StatCard({ label, value }) {
     <div className="rounded-[1.2rem] border border-stone-200 bg-white px-4 py-3">
       <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{label}</p>
       <p className="mt-2 text-2xl font-semibold text-stone-950">{value}</p>
-    </div>
-  )
-}
-
-/**
- * Render a roadmap tile in the future-work panel.
- *
- * @param {{ title: string, body: string }} props - Tile heading and supporting text.
- * @returns {JSX.Element} A roadmap tile.
- */
-function PlaceholderTile({ title, body }) {
-  return (
-    <div className="rounded-[1.1rem] border border-white/10 bg-white/5 px-4 py-3">
-      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-300">{title}</p>
-      <p className="mt-2 text-sm text-stone-300">{body}</p>
     </div>
   )
 }
