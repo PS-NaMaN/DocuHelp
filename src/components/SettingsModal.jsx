@@ -9,9 +9,18 @@ import { useMemo, useState } from 'react'
  *   currentModelId: string,
  *   availableModelIds: string[],
  *   ocrScale: number,
+ *   generationSettings: {
+ *     temperature: number,
+ *     topP: number,
+ *     maxTokens: number,
+ *     presencePenalty: number,
+ *     frequencyPenalty: number,
+ *     repetitionPenalty: number,
+ *   },
  *   onClose: () => void,
  *   onDeleteIndexedData: () => Promise<void>,
  *   onChangeOcrScale: (nextOcrScale: number | string) => void,
+ *   onChangeGenerationSetting: (settingName: string, nextValue: number | string) => void,
  *   onChangeModel: (modelId: string) => Promise<void>,
  * }} props - Settings values and actions.
  * @returns {JSX.Element} The modal overlay.
@@ -22,9 +31,11 @@ function SettingsModal({
   currentModelId,
   availableModelIds,
   ocrScale,
+  generationSettings,
   onClose,
   onDeleteIndexedData,
   onChangeOcrScale,
+  onChangeGenerationSetting,
   onChangeModel,
 }) {
   const [isModelListOpen, setIsModelListOpen] = useState(false)
@@ -83,10 +94,12 @@ function SettingsModal({
           <ModelSettingsCard
             currentModelId={currentModelId}
             supportedModelIds={supportedModelIds}
+            generationSettings={generationSettings}
             isChangingModel={isChangingModel}
             isModelListOpen={isModelListOpen}
             onToggleModelList={() => setIsModelListOpen((isOpen) => !isOpen)}
             onCloseModelList={() => setIsModelListOpen(false)}
+            onChangeGenerationSetting={onChangeGenerationSetting}
             onChangeModel={onChangeModel}
           />
           <IndexedDataDangerCard
@@ -146,10 +159,19 @@ function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
  * @param {{
  *   currentModelId: string,
  *   supportedModelIds: string[],
+ *   generationSettings: {
+ *     temperature: number,
+ *     topP: number,
+ *     maxTokens: number,
+ *     presencePenalty: number,
+ *     frequencyPenalty: number,
+ *     repetitionPenalty: number,
+ *   },
  *   isChangingModel: boolean,
  *   isModelListOpen: boolean,
  *   onToggleModelList: () => void,
  *   onCloseModelList: () => void,
+ *   onChangeGenerationSetting: (settingName: string, nextValue: number | string) => void,
  *   onChangeModel: (modelId: string) => Promise<void>,
  * }} props - Model UI state and actions.
  * @returns {JSX.Element} Model settings card.
@@ -157,10 +179,12 @@ function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
 function ModelSettingsCard({
   currentModelId,
   supportedModelIds,
+  generationSettings,
   isChangingModel,
   isModelListOpen,
   onToggleModelList,
   onCloseModelList,
+  onChangeGenerationSetting,
   onChangeModel,
 }) {
   return (
@@ -179,6 +203,63 @@ function ModelSettingsCard({
         >
           {isModelListOpen ? 'Hide LLM List' : 'Change LLM'}
         </button>
+      </div>
+
+      <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <GenerationSettingInput
+          label="Temperature"
+          helperText="Controls randomness. Lower values are more deterministic."
+          value={generationSettings.temperature}
+          min="0"
+          max="2"
+          step="0.05"
+          onChange={(nextValue) => onChangeGenerationSetting('temperature', nextValue)}
+        />
+        <GenerationSettingInput
+          label="Top P"
+          helperText="Nucleus sampling threshold for token selection."
+          value={generationSettings.topP}
+          min="0"
+          max="1"
+          step="0.05"
+          onChange={(nextValue) => onChangeGenerationSetting('topP', nextValue)}
+        />
+        <GenerationSettingInput
+          label="Max Tokens"
+          helperText="Hard cap for the generated reply length."
+          value={generationSettings.maxTokens}
+          min="1"
+          max="4096"
+          step="1"
+          onChange={(nextValue) => onChangeGenerationSetting('maxTokens', nextValue)}
+        />
+        <GenerationSettingInput
+          label="Repetition Penalty"
+          helperText="Reduces repetitive output in MLC-native decoding."
+          value={generationSettings.repetitionPenalty}
+          min="0.8"
+          max="2.0"
+          step="0.05"
+          onChange={(nextValue) => onChangeGenerationSetting('repetitionPenalty', nextValue)}
+        />
+        <GenerationSettingInput
+          label="Presence Penalty"
+          helperText="Encourages the model to introduce new concepts."
+          value={generationSettings.presencePenalty}
+          min="-2"
+          max="2"
+          step="0.1"
+          onChange={(nextValue) => onChangeGenerationSetting('presencePenalty', nextValue)}
+        />
+        <GenerationSettingInput
+          label="Frequency Penalty"
+          helperText="Discourages repeating the same tokens too often."
+          value={generationSettings.frequencyPenalty}
+          min="-2"
+          max="2"
+          step="0.1"
+          onChange={(nextValue) => onChangeGenerationSetting('frequencyPenalty', nextValue)}
+        />
       </div>
 
       {isModelListOpen ? (
@@ -221,6 +302,38 @@ function ModelSettingsCard({
         </div>
       ) : null}
     </section>
+  )
+}
+
+/**
+ * Render one numeric generation setting input with supporting copy.
+ *
+ * @param {{
+ *   label: string,
+ *   helperText: string,
+ *   value: number,
+ *   min: string,
+ *   max: string,
+ *   step: string,
+ *   onChange: (nextValue: string) => void,
+ * }} props - One generation setting field.
+ * @returns {JSX.Element} A labeled numeric input block.
+ */
+function GenerationSettingInput({ label, helperText, value, min, max, step, onChange }) {
+  return (
+    <label className="rounded-[1.2rem] border border-stone-200 bg-stone-50 p-4">
+      <span className="text-sm font-semibold text-stone-900">{label}</span>
+      <span className="mt-2 block text-sm leading-6 text-stone-500">{helperText}</span>
+      <input
+        type="number"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="mt-3 w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-cyan-400"
+      />
+    </label>
   )
 }
 

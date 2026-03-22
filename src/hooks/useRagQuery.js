@@ -10,6 +10,14 @@ import { logFunctionError } from '../utils/logger'
  * @param {{
  *   engine: import('@mlc-ai/web-llm').MLCEngine | null,
  *   topK?: number,
+ *   generationSettings?: {
+ *     temperature: number,
+ *     topP: number,
+ *     maxTokens: number,
+ *     presencePenalty: number,
+ *     frequencyPenalty: number,
+ *     repetitionPenalty: number,
+ *   },
  * }} options - Hook configuration including the active local WebLLM engine.
  * @returns {{
  *   messages: Array<{
@@ -27,7 +35,7 @@ import { logFunctionError } from '../utils/logger'
  * }} Query state and orchestrator function.
  */
 export function useRagQuery(options) {
-  const { engine, topK = 5 } = options
+  const { engine, topK = 5, generationSettings } = options
   const nextMessageIdRef = useRef(0)
   const [messages, setMessages] = useState([])
   const [isGenerating, setIsGenerating] = useState(false)
@@ -57,7 +65,13 @@ export function useRagQuery(options) {
       const queryVector = await generateEmbedding(normalizedUserQuery)
       const retrievedChunks = await searchSimilarChunks(queryVector, topK, activeFileNames)
       const systemPrompt = buildSystemPrompt(retrievedChunks)
-      const streamedReply = await streamRagAnswer(engine, systemPrompt, normalizedUserQuery, setCurrentStreamingReply)
+      const streamedReply = await streamRagAnswer(
+        engine,
+        systemPrompt,
+        normalizedUserQuery,
+        generationSettings,
+        setCurrentStreamingReply,
+      )
       const assistantMessage = createAssistantMessage(streamedReply, retrievedChunks)
 
       setMessages((previousMessages) => [...previousMessages, assistantMessage])
@@ -154,12 +168,32 @@ export function useRagQuery(options) {
  * @param {import('@mlc-ai/web-llm').MLCEngine} engine - Active local WebLLM engine.
  * @param {string} systemPrompt - Retrieval-grounded system prompt.
  * @param {string} userQuery - Original user question.
+ * @param {{
+ *   temperature?: number,
+ *   topP?: number,
+ *   maxTokens?: number,
+ *   presencePenalty?: number,
+ *   frequencyPenalty?: number,
+ *   repetitionPenalty?: number,
+ * } | undefined} generationSettings - User-configured generation controls.
  * @param {(replyText: string) => void} updateStreamingReply - Setter for the in-progress streamed reply.
  * @returns {Promise<string>} Final accumulated assistant reply.
  */
-async function streamRagAnswer(engine, systemPrompt, userQuery, updateStreamingReply) {
+async function streamRagAnswer(
+  engine,
+  systemPrompt,
+  userQuery,
+  generationSettings,
+  updateStreamingReply,
+) {
   const responseStream = await engine.chat.completions.create({
     stream: true,
+    temperature: generationSettings?.temperature,
+    top_p: generationSettings?.topP,
+    max_tokens: generationSettings?.maxTokens,
+    presence_penalty: generationSettings?.presencePenalty,
+    frequency_penalty: generationSettings?.frequencyPenalty,
+    repetition_penalty: generationSettings?.repetitionPenalty,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userQuery },

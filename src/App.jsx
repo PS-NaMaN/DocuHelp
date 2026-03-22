@@ -43,7 +43,12 @@ function App() {
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
   const [ingestionProgress, setIngestionProgress] = useState(INITIAL_PROGRESS_STATE)
   const [errorMessage, setErrorMessage] = useState('')
-  const { ocrScale, setOcrScale } = useSettings()
+  const {
+    ocrScale,
+    setOcrScale,
+    generationSettings,
+    updateGenerationSetting,
+  } = useSettings()
   const {
     engine,
     isSupported: isLocalLlmSupported,
@@ -62,7 +67,7 @@ function App() {
     setActiveFileNames,
     toggleFileSelection,
     askQuestion,
-  } = useRagQuery({ engine })
+  } = useRagQuery({ engine, generationSettings })
 
   useEffect(() => {
     async function loadInitialLibraryState() {
@@ -271,9 +276,11 @@ function App() {
           currentModelId={getActiveModelId() ?? DEFAULT_WEB_LLM_MODEL_ID}
           availableModelIds={[DEFAULT_WEB_LLM_MODEL_ID]}
           ocrScale={ocrScale}
+          generationSettings={generationSettings}
           onClose={closeSettingsModal}
           onDeleteIndexedData={handleDeleteIndexedData}
           onChangeOcrScale={setOcrScale}
+          onChangeGenerationSetting={updateGenerationSetting}
           onChangeModel={handleChangeModel}
         />
       ) : null}
