@@ -9,6 +9,7 @@ export function buildSystemPrompt() {
     'Answer using only the provided text.',
     'The provided text may contain OCR mistakes, broken formatting, or misspellings.',
     'When the intended meaning is clear, interpret obvious OCR errors instead of refusing immediately.',
+    'If the provided text contains enough information to answer, answer directly and do not append any fallback refusal.',
     'Provide the most relevant grounded answer you can from the text and cite sources like [Source 1] when useful.',
     "If the text still does not contain the answer, reply with: I'm sorry, but I cannot find the answer to that in the provided documents.",
     'Do not invent facts.',
@@ -55,6 +56,8 @@ export function buildContextualUserMessage(retrievedChunks, userQuery) {
   return [
     'The following context comes from local documents and may include OCR noise.',
     'Use it as the sole basis for the answer.',
+    'Prioritize the passages that directly mention the subject of the question.',
+    'Ignore less relevant passages instead of summarizing everything broadly.',
     '',
     `Context:\n${safeContext}`,
     '',

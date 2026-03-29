@@ -16,7 +16,9 @@ import {
 } from './services/libraryService'
 import {
   DEFAULT_WEB_LLM_MODEL_ID,
+  deleteSupportedModelCaches,
   getActiveModelId,
+  getSupportedModelOptions,
 } from './services/llmService'
 
 const INITIAL_PROGRESS_STATE = {
@@ -37,6 +39,7 @@ function App() {
   const [availableFileNames, setAvailableFileNames] = useState([])
   const [storageSummary, setStorageSummary] = useState({ documentCount: 0, chunkCount: 0 })
   const [isIngestingDocuments, setIsIngestingDocuments] = useState(false)
+  const [isDeletingLlmCache, setIsDeletingLlmCache] = useState(false)
   const [isDeletingIndexedData, setIsDeletingIndexedData] = useState(false)
   const [deletingDocumentFileName, setDeletingDocumentFileName] = useState('')
   const [isChangingModel, setIsChangingModel] = useState(false)
@@ -46,6 +49,8 @@ function App() {
   const {
     ocrScale,
     setOcrScale,
+    selectedModelId,
+    setSelectedModelId,
     generationSettings,
     updateGenerationSetting,
   } = useSettings()
@@ -58,7 +63,8 @@ function App() {
     isReady: isLocalLlmReady,
     errorMessage: localLlmErrorMessage,
     initializeModel,
-  } = useLocalLLM()
+    unloadModel,
+  } = useLocalLLM({ modelId: selectedModelId })
   const {
     messages,
     isGenerating,
@@ -160,6 +166,30 @@ function App() {
   }
 
   /**
+   * Delete cached local-model artifacts after a browser confirmation.
+   *
+   * @returns {Promise<void>} Resolves when cache deletion completes or the user cancels.
+   */
+  async function handleDeleteLlmCache() {
+    if (!shouldDeleteLlmCache()) {
+      return
+    }
+
+    setIsDeletingLlmCache(true)
+    setErrorMessage('')
+
+    try {
+      await unloadModel()
+      await deleteSupportedModelCaches()
+      closeSettingsModal()
+    } catch (deleteError) {
+      setErrorMessage(getErrorMessage(deleteError, 'Unable to delete the local model cache.'))
+    } finally {
+      setIsDeletingLlmCache(false)
+    }
+  }
+
+  /**
    * Delete one indexed document after a browser confirmation prompt.
    *
    * @param {string} fileName - File name whose local chunks should be removed.
@@ -198,6 +228,7 @@ function App() {
     }
 
     setIsChangingModel(true)
+    setSelectedModelId(modelId)
 
     try {
       await initializeModel(modelId)
@@ -271,13 +302,15 @@ function App() {
 
       {isSettingsModalOpen ? (
         <SettingsModal
+          isDeletingLlmCache={isDeletingLlmCache}
           isDeletingIndexedData={isDeletingIndexedData}
           isChangingModel={isChangingModel}
-          currentModelId={getActiveModelId() ?? DEFAULT_WEB_LLM_MODEL_ID}
-          availableModelIds={[DEFAULT_WEB_LLM_MODEL_ID]}
+          currentModelId={getActiveModelId() ?? selectedModelId ?? DEFAULT_WEB_LLM_MODEL_ID}
+          availableModels={getSupportedModelOptions()}
           ocrScale={ocrScale}
           generationSettings={generationSettings}
           onClose={closeSettingsModal}
+          onDeleteLlmCache={handleDeleteLlmCache}
           onDeleteIndexedData={handleDeleteIndexedData}
           onChangeOcrScale={setOcrScale}
           onChangeGenerationSetting={updateGenerationSetting}
@@ -399,6 +432,17 @@ function getErrorMessage(thrownError, fallbackMessage) {
 function shouldDeleteIndexedData() {
   return window.confirm(
     'Delete all indexed data stored by DocuHelp on this site? This removes your locally indexed documents, chunks, and embeddings from this browser only.',
+  )
+}
+
+/**
+ * Ask the browser for final confirmation before deleting local WebLLM caches.
+ *
+ * @returns {boolean} True when the user confirms deletion.
+ */
+function shouldDeleteLlmCache() {
+  return window.confirm(
+    'Delete the cached local LLM files stored by DocuHelp on this site? This removes downloaded WebLLM model artifacts from this browser only.',
   )
 }
 

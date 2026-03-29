@@ -7,6 +7,9 @@ import {
 import { searchSimilarChunks } from '../services/vectorSearchService'
 import { logFunctionError } from '../utils/logger'
 
+const FALLBACK_REPLY =
+  "I'm sorry, but I cannot find the answer to that in the provided documents."
+
 /**
  * Coordinate the full local RAG query pipeline from query embedding to streamed answer.
  *
@@ -66,7 +69,12 @@ export function useRagQuery(options) {
 
     try {
       const queryVector = await generateEmbedding(normalizedUserQuery)
-      const retrievedChunks = await searchSimilarChunks(queryVector, topK, activeFileNames)
+      const retrievedChunks = await searchSimilarChunks(
+        queryVector,
+        topK,
+        activeFileNames,
+        normalizedUserQuery,
+      )
       const systemPrompt = buildSystemPrompt()
       const contextualUserMessage = buildContextualUserMessage(
         retrievedChunks,
@@ -79,7 +87,8 @@ export function useRagQuery(options) {
         generationSettings,
         setCurrentStreamingReply,
       )
-      const assistantMessage = createAssistantMessage(streamedReply, retrievedChunks)
+      const assistantReply = normalizeAssistantReply(streamedReply)
+      const assistantMessage = createAssistantMessage(assistantReply, retrievedChunks)
 
       setMessages((previousMessages) => [...previousMessages, assistantMessage])
       setCurrentStreamingReply('')
@@ -145,7 +154,7 @@ export function useRagQuery(options) {
   }
 
   /**
-   * Create a final assistant message including retrieval citations used for generation.
+   * Create a final assistant message including only the citations that should be shown in the UI.
    *
    * @param {string} replyText - Final streamed reply text.
    * @param {Array<{ citationLabel: string, similarity: number }>} retrievedChunks - Retrieval results used for context.
@@ -158,10 +167,11 @@ export function useRagQuery(options) {
    */
   function createAssistantMessage(replyText, retrievedChunks) {
     const assistantMessage = createChatMessage('assistant', replyText)
+    const selectedCitations = selectAssistantCitations(replyText, retrievedChunks)
 
     return {
       ...assistantMessage,
-      citations: retrievedChunks.map((retrievedChunk) => ({
+      citations: selectedCitations.map((retrievedChunk) => ({
         citationLabel: retrievedChunk.citationLabel,
         similarity: retrievedChunk.similarity,
       })),
@@ -198,7 +208,7 @@ async function streamRagAnswer(
     { role: 'user', content: contextualUserMessage },
   ]
 
-  console.log("🚀 FINAL PAYLOAD TO LLM:", messages)
+  console.log('🚀 FINAL PAYLOAD TO LLM:', messages)
 
   const responseStream = await engine.chat.completions.create({
     stream: true,
@@ -225,4 +235,134 @@ async function streamRagAnswer(
   }
 
   return accumulatedReply.trim()
+}
+
+/**
+ * Remove contradictory fallback text when the model already produced a substantive answer.
+ *
+ * @param {string} rawAssistantReply - Raw reply returned by the local model.
+ * @returns {string} Cleaned assistant reply for the UI.
+ */
+function normalizeAssistantReply(rawAssistantReply) {
+  const trimmedAssistantReply = rawAssistantReply.trim()
+
+  if (!trimmedAssistantReply || trimmedAssistantReply === FALLBACK_REPLY) {
+    return trimmedAssistantReply
+  }
+
+  const cleanedAssistantReply = stripTrailingFallbackInstruction(trimmedAssistantReply)
+
+  return cleanedAssistantReply || FALLBACK_REPLY
+}
+
+/**
+ * Keep only the citations that the assistant actually referenced, or fall back to the strongest ones.
+ *
+ * @param {string} replyText - Final assistant reply text.
+ * @param {Array<{ citationLabel: string, similarity: number }>} retrievedChunks - Retrieved chunks used for prompting.
+ * @returns {Array<{ citationLabel: string, similarity: number }>} Filtered citations for the UI.
+ */
+function selectAssistantCitations(replyText, retrievedChunks) {
+  if (!retrievedChunks.length) {
+    return []
+  }
+
+  const citedSourceNumbers = extractCitedSourceNumbers(replyText)
+
+  if (citedSourceNumbers.length) {
+    const explicitlyCitedChunks = citedSourceNumbers
+      .map((sourceNumber) => retrievedChunks[sourceNumber - 1])
+      .filter(Boolean)
+
+    return deduplicateCitations(explicitlyCitedChunks)
+  }
+
+  const meaningfullyRelevantChunks = retrievedChunks.filter(
+    (retrievedChunk) => retrievedChunk.similarity > 0.22,
+  )
+  const fallbackChunks = meaningfullyRelevantChunks.length
+    ? meaningfullyRelevantChunks
+    : retrievedChunks.slice(0, 1)
+
+  return deduplicateCitations(fallbackChunks.slice(0, 2))
+}
+
+/**
+ * Extract one-based `[Source N]` references from the assistant reply.
+ *
+ * @param {string} replyText - Final assistant reply text.
+ * @returns {number[]} Unique cited source numbers in appearance order.
+ */
+function extractCitedSourceNumbers(replyText) {
+  const sourceMatches = Array.from(replyText.matchAll(/\[Source\s+(\d+)\]/gi))
+  const uniqueSourceNumbers = sourceMatches
+    .map((sourceMatch) => Number.parseInt(sourceMatch[1], 10))
+    .filter((sourceNumber) => Number.isInteger(sourceNumber) && sourceNumber > 0)
+
+  return Array.from(new Set(uniqueSourceNumbers))
+}
+
+/**
+ * Deduplicate citations by label while preserving their original order.
+ *
+ * @param {Array<{ citationLabel: string, similarity: number }>} citations - Candidate citations.
+ * @returns {Array<{ citationLabel: string, similarity: number }>} Deduplicated citations.
+ */
+function deduplicateCitations(citations) {
+  const seenCitationLabels = new Set()
+
+  return citations.filter((citation) => {
+    if (seenCitationLabels.has(citation.citationLabel)) {
+      return false
+    }
+
+    seenCitationLabels.add(citation.citationLabel)
+    return true
+  })
+}
+
+/**
+ * Remove contradictory refusal text when it appears after a substantive grounded answer.
+ *
+ * @param {string} assistantReply - Raw reply returned by the model.
+ * @returns {string} Cleaned reply without a duplicated fallback instruction.
+ */
+function stripTrailingFallbackInstruction(assistantReply) {
+  const replyWithoutInstructionTail = assistantReply
+    .replace(/\s*Do not invent facts\.?$/i, '')
+    .trim()
+  const fallbackIndex = replyWithoutInstructionTail
+    .toLowerCase()
+    .indexOf(FALLBACK_REPLY.toLowerCase())
+
+  if (fallbackIndex <= 0) {
+    return replyWithoutInstructionTail
+  }
+
+  const answerBeforeFallback = replyWithoutInstructionTail.slice(0, fallbackIndex).trim()
+
+  if (!looksLikeSubstantiveAnswer(answerBeforeFallback)) {
+    return replyWithoutInstructionTail
+  }
+
+  return answerBeforeFallback
+}
+
+/**
+ * Decide whether the model already produced enough grounded content to keep.
+ *
+ * @param {string} answerText - Portion of the reply that appears before the fallback sentence.
+ * @returns {boolean} True when the answer is substantial enough to keep on its own.
+ */
+function looksLikeSubstantiveAnswer(answerText) {
+  if (!answerText) {
+    return false
+  }
+
+  const normalizedAnswerText = answerText
+    .replace(/\[Source\s+\d+\]/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return normalizedAnswerText.split(' ').length >= 12
 }

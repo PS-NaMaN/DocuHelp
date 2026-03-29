@@ -1,7 +1,34 @@
-import { CreateMLCEngine, prebuiltAppConfig } from '@mlc-ai/web-llm'
+import {
+  CreateMLCEngine,
+  deleteModelAllInfoInCache,
+  prebuiltAppConfig,
+} from '@mlc-ai/web-llm'
 import { logAndRethrow } from '../utils/logger'
 
 export const DEFAULT_WEB_LLM_MODEL_ID = 'Llama-3.2-1B-Instruct-q4f16_1-MLC'
+
+const SUPPORTED_WEB_LLM_MODELS = [
+  {
+    id: 'Llama-3.2-1B-Instruct-q4f16_1-MLC',
+    label: 'Llama 3.2 1B Instruct',
+    description: 'Balanced default for grounded document Q&A with a compact 1B parameter footprint.',
+  },
+  {
+    id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+    label: 'Qwen 2.5 0.5B Instruct',
+    description: 'Fastest lightweight option for quick local answers on lower-end hardware.',
+  },
+  {
+    id: 'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
+    label: 'Qwen 2.5 1.5B Instruct',
+    description: 'A stronger small-model tradeoff when you want better reasoning than the 0.5B variant.',
+  },
+  {
+    id: 'TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC',
+    label: 'TinyLlama 1.1B Chat',
+    description: 'Very small chat model that is useful when download size and startup speed matter most.',
+  },
+]
 
 let activeEngine = null
 let activeModelId = null
@@ -34,7 +61,7 @@ export async function checkWebGPUSupport() {
 /**
  * Initialize a local WebLLM engine and stream model-loading progress to the caller.
  *
- * @param {string} [modelId=DEFAULT_WEB_LLM_MODEL_ID] - Model id to load from WebLLM's prebuilt config.
+ * @param {string} [modelId=DEFAULT_WEB_LLM_MODEL_ID] - Model id to load from the curated supported list.
  * @param {(progress: { text: string, progress: number, timeElapsed: number }) => void} [progressCallback] - Optional initialization progress callback.
  * @returns {Promise<import('@mlc-ai/web-llm').MLCEngine>} Initialized WebLLM engine.
  * @throws {Error} Throws when WebGPU is unsupported or the requested model is unavailable.
@@ -49,6 +76,10 @@ export async function initializeEngine(
 
     if (shouldReuseActiveEngine(modelId)) {
       return activeEngine
+    }
+
+    if (activeEngine && activeModelId && activeModelId !== modelId) {
+      await unloadActiveEngine()
     }
 
     reportInitializationProgress(progressCallback, {
@@ -92,6 +123,24 @@ export function getActiveModelId() {
 }
 
 /**
+ * Return the curated model options shown in the settings UI.
+ *
+ * @returns {Array<{ id: string, label: string, description: string }>} Supported local model options.
+ */
+export function getSupportedModelOptions() {
+  return SUPPORTED_WEB_LLM_MODELS.slice()
+}
+
+/**
+ * Return the curated list of supported model ids.
+ *
+ * @returns {string[]} Supported model ids.
+ */
+export function getSupportedModelIds() {
+  return SUPPORTED_WEB_LLM_MODELS.map((modelOption) => modelOption.id)
+}
+
+/**
  * Unload the active model and release WebLLM resources.
  *
  * @returns {Promise<void>} Resolves after the active engine has been unloaded.
@@ -99,6 +148,7 @@ export function getActiveModelId() {
 export async function unloadActiveEngine() {
   try {
     if (!activeEngine) {
+      activeModelId = null
       return
     }
 
@@ -113,12 +163,22 @@ export async function unloadActiveEngine() {
 }
 
 /**
- * Return the list of prebuilt model ids available in the installed WebLLM package.
+ * Delete all cached browser artifacts for the curated supported models.
  *
- * @returns {string[]} Available prebuilt model ids.
+ * @returns {Promise<void>} Resolves after the supported model caches have been cleared.
  */
-export function getAvailableModelIds() {
-  return prebuiltAppConfig.model_list.map((modelRecord) => modelRecord.model_id)
+export async function deleteSupportedModelCaches() {
+  try {
+    await unloadActiveEngine()
+
+    for (const modelId of getSupportedModelIds()) {
+      await deleteModelAllInfoInCache(modelId)
+    }
+  } catch (error) {
+    logAndRethrow('deleteSupportedModelCaches', error, {
+      supportedModelCount: getSupportedModelIds().length,
+    })
+  }
 }
 
 /**
@@ -152,14 +212,20 @@ function validateWebGPUAvailability() {
 }
 
 /**
- * Validate that the requested model exists in WebLLM's installed prebuilt model list.
+ * Validate that the requested model exists both in our curated list and in the installed WebLLM package.
  *
  * @param {string} modelId - Model id requested by the caller.
  * @returns {void}
- * @throws {Error} Throws when the model id is unknown.
+ * @throws {Error} Throws when the model id is unsupported.
  */
 function validateModelId(modelId) {
-  const availableModelIds = getAvailableModelIds()
+  const supportedModelIds = getSupportedModelIds()
+
+  if (!supportedModelIds.includes(modelId)) {
+    throw new Error(`Model "${modelId}" is not enabled in this DocuHelp build.`)
+  }
+
+  const availableModelIds = prebuiltAppConfig.model_list.map((modelRecord) => modelRecord.model_id)
 
   if (availableModelIds.includes(modelId)) {
     return

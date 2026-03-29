@@ -1,13 +1,12 @@
-import { useMemo, useState } from 'react'
-
 /**
  * Render the settings modal for OCR preferences, local storage actions, and LLM controls.
  *
  * @param {{
+ *   isDeletingLlmCache: boolean,
  *   isDeletingIndexedData: boolean,
  *   isChangingModel: boolean,
  *   currentModelId: string,
- *   availableModelIds: string[],
+ *   availableModels: Array<{ id: string, label: string, description: string }>,
  *   ocrScale: number,
  *   generationSettings: {
  *     temperature: number,
@@ -18,6 +17,7 @@ import { useMemo, useState } from 'react'
  *     repetitionPenalty: number,
  *   },
  *   onClose: () => void,
+ *   onDeleteLlmCache: () => Promise<void>,
  *   onDeleteIndexedData: () => Promise<void>,
  *   onChangeOcrScale: (nextOcrScale: number | string) => void,
  *   onChangeGenerationSetting: (settingName: string, nextValue: number | string) => void,
@@ -26,35 +26,26 @@ import { useMemo, useState } from 'react'
  * @returns {JSX.Element} The modal overlay.
  */
 function SettingsModal({
+  isDeletingLlmCache,
   isDeletingIndexedData,
   isChangingModel,
   currentModelId,
-  availableModelIds,
+  availableModels,
   ocrScale,
   generationSettings,
   onClose,
+  onDeleteLlmCache,
   onDeleteIndexedData,
   onChangeOcrScale,
   onChangeGenerationSetting,
   onChangeModel,
 }) {
-  const [isModelListOpen, setIsModelListOpen] = useState(false)
-  const supportedModelIds = useMemo(
-    () => Array.from(new Set(availableModelIds.filter(Boolean))),
-    [availableModelIds],
-  )
-
   /**
-   * Close the model list when the user clicks outside it, otherwise close the modal.
+   * Close the modal when the user clicks on the overlay.
    *
    * @returns {void}
    */
   function handleOverlayClick() {
-    if (isModelListOpen) {
-      setIsModelListOpen(false)
-      return
-    }
-
     onClose()
   }
 
@@ -64,7 +55,7 @@ function SettingsModal({
       onClick={handleOverlayClick}
     >
       <div
-        className="flex w-full max-w-2xl max-h-[min(90vh,900px)] flex-col rounded-[2rem] border border-stone-200 bg-white shadow-[0_30px_120px_rgba(28,25,23,0.22)] overflow-hidden"
+        className="flex max-h-[min(90vh,900px)] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-[0_30px_120px_rgba(28,25,23,0.22)]"
         onClick={(event) => event.stopPropagation()}
       >
         <div className="flex-shrink-0 border-b border-stone-100 p-8 pb-6">
@@ -81,28 +72,29 @@ function SettingsModal({
               type="button"
               className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50"
               onClick={onClose}
-              disabled={isDeletingIndexedData || isChangingModel}
+              disabled={isDeletingIndexedData || isDeletingLlmCache || isChangingModel}
             >
               Close
             </button>
           </div>
           <p className="mt-4 text-sm leading-6 text-stone-600">
-            Tune OCR behavior, inspect the active browser LLM, and manage locally indexed data for this site.
+            Tune OCR behavior, switch between supported local models, and manage the browser data that DocuHelp stores on this site.
           </p>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 pt-6 space-y-6">
+        <div className="flex-1 space-y-6 overflow-y-auto p-8 pt-6">
           <OcrSettingsCard ocrScale={ocrScale} onChangeOcrScale={onChangeOcrScale} />
           <ModelSettingsCard
             currentModelId={currentModelId}
-            supportedModelIds={supportedModelIds}
+            availableModels={availableModels}
             generationSettings={generationSettings}
             isChangingModel={isChangingModel}
-            isModelListOpen={isModelListOpen}
-            onToggleModelList={() => setIsModelListOpen((isOpen) => !isOpen)}
-            onCloseModelList={() => setIsModelListOpen(false)}
             onChangeGenerationSetting={onChangeGenerationSetting}
             onChangeModel={onChangeModel}
+          />
+          <LlmCacheDangerCard
+            isDeletingLlmCache={isDeletingLlmCache}
+            onDeleteLlmCache={onDeleteLlmCache}
           />
           <IndexedDataDangerCard
             isDeletingIndexedData={isDeletingIndexedData}
@@ -156,11 +148,11 @@ function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
 }
 
 /**
- * Render current model details and a change-model chooser.
+ * Render current model details and the supported-model chooser.
  *
  * @param {{
  *   currentModelId: string,
- *   supportedModelIds: string[],
+ *   availableModels: Array<{ id: string, label: string, description: string }>,
  *   generationSettings: {
  *     temperature: number,
  *     topP: number,
@@ -170,9 +162,6 @@ function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
  *     repetitionPenalty: number,
  *   },
  *   isChangingModel: boolean,
- *   isModelListOpen: boolean,
- *   onToggleModelList: () => void,
- *   onCloseModelList: () => void,
  *   onChangeGenerationSetting: (settingName: string, nextValue: number | string) => void,
  *   onChangeModel: (modelId: string) => Promise<void>,
  * }} props - Model UI state and actions.
@@ -180,31 +169,43 @@ function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
  */
 function ModelSettingsCard({
   currentModelId,
-  supportedModelIds,
+  availableModels,
   generationSettings,
   isChangingModel,
-  isModelListOpen,
-  onToggleModelList,
-  onCloseModelList,
   onChangeGenerationSetting,
   onChangeModel,
 }) {
+  const currentModelOption = availableModels.find((modelOption) => modelOption.id === currentModelId)
+
   return (
     <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-sm font-semibold text-stone-900">Active LLM Engine</p>
+          <p className="mt-2 text-base font-semibold text-stone-950">
+            {currentModelOption?.label ?? currentModelId}
+          </p>
           <p className="mt-2 break-all text-sm leading-6 text-stone-600">{currentModelId}</p>
+          {currentModelOption?.description ? (
+            <p className="mt-2 text-sm leading-6 text-stone-500">{currentModelOption.description}</p>
+          ) : null}
         </div>
 
-        <button
-          type="button"
-          className="rounded-full bg-cyan-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-cyan-700 disabled:cursor-not-allowed disabled:opacity-50"
-          onClick={onToggleModelList}
-          disabled={isChangingModel}
-        >
-          {isModelListOpen ? 'Hide LLM List' : 'Change LLM'}
-        </button>
+        <span className="rounded-full bg-cyan-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+          {isChangingModel ? 'Loading' : 'Supported'}
+        </span>
+      </div>
+
+      <div className="mt-5 space-y-3">
+        {availableModels.map((modelOption) => (
+          <ModelOptionCard
+            key={modelOption.id}
+            modelOption={modelOption}
+            isActive={modelOption.id === currentModelId}
+            isChangingModel={isChangingModel}
+            onChangeModel={onChangeModel}
+          />
+        ))}
       </div>
 
       <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -263,47 +264,58 @@ function ModelSettingsCard({
           onChange={(nextValue) => onChangeGenerationSetting('frequencyPenalty', nextValue)}
         />
       </div>
-
-      {isModelListOpen ? (
-        <div className="mt-4 space-y-3">
-          <div className="max-h-64 space-y-3 overflow-y-auto pr-1">
-            {supportedModelIds.map((modelId) => (
-              <button
-                key={modelId}
-                type="button"
-                className="flex w-full items-center justify-between rounded-[1.2rem] border border-stone-200 bg-stone-50 px-4 py-3 text-left transition hover:border-cyan-300 hover:bg-cyan-50"
-                onClick={() => {
-                  if (modelId === currentModelId) {
-                    return
-                  }
-
-                  void onChangeModel(modelId)
-                }}
-                disabled={isChangingModel || modelId === currentModelId}
-              >
-                <span className="min-w-0 truncate text-sm font-medium text-stone-900">{modelId}</span>
-                <span className="text-xs uppercase tracking-[0.18em] text-stone-500">
-                  {modelId === currentModelId ? 'Active' : isChangingModel ? 'Loading' : 'Select'}
-                </span>
-              </button>
-            ))}
-          </div>
-
-          <p className="rounded-[1.2rem] border border-dashed border-stone-200 px-4 py-4 text-sm text-stone-500">
-            DocuHelp currently ships with the model shown here. Additional models are not enabled in this build yet.
-          </p>
-
-          <button
-            type="button"
-            className="rounded-full border border-stone-200 px-4 py-2 text-sm font-semibold text-stone-700 transition hover:border-stone-300 hover:bg-stone-50"
-            onClick={onCloseModelList}
-            disabled={isChangingModel}
-          >
-            Back
-          </button>
-        </div>
-      ) : null}
     </section>
+  )
+}
+
+/**
+ * Render one supported model card inside the model chooser.
+ *
+ * @param {{
+ *   modelOption: { id: string, label: string, description: string },
+ *   isActive: boolean,
+ *   isChangingModel: boolean,
+ *   onChangeModel: (modelId: string) => Promise<void>,
+ * }} props - Supported model card props.
+ * @returns {JSX.Element} One model option card.
+ */
+function ModelOptionCard({ modelOption, isActive, isChangingModel, onChangeModel }) {
+  return (
+    <button
+      type="button"
+      className={`w-full rounded-[1.3rem] border px-4 py-4 text-left transition ${
+        isActive
+          ? 'border-cyan-300 bg-cyan-50'
+          : 'border-stone-200 bg-stone-50 hover:border-cyan-300 hover:bg-cyan-50/60'
+      }`}
+      onClick={() => {
+        if (isActive) {
+          return
+        }
+
+        void onChangeModel(modelOption.id)
+      }}
+      disabled={isChangingModel}
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-stone-950">{modelOption.label}</p>
+          <p className="mt-2 break-all text-xs uppercase tracking-[0.16em] text-stone-500">
+            {modelOption.id}
+          </p>
+          <p className="mt-3 text-sm leading-6 text-stone-600">{modelOption.description}</p>
+        </div>
+        <span
+          className={`rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] ${
+            isActive
+              ? 'bg-cyan-600 text-white'
+              : 'bg-white text-stone-600'
+          }`}
+        >
+          {isActive ? 'Active' : isChangingModel ? 'Loading' : 'Load'}
+        </span>
+      </div>
+    </button>
   )
 }
 
@@ -336,6 +348,36 @@ function GenerationSettingInput({ label, helperText, value, min, max, step, onCh
         className="mt-3 w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-cyan-400"
       />
     </label>
+  )
+}
+
+/**
+ * Render the destructive local LLM cache action.
+ *
+ * @param {{
+ *   isDeletingLlmCache: boolean,
+ *   onDeleteLlmCache: () => Promise<void>,
+ * }} props - LLM cache delete state and action.
+ * @returns {JSX.Element} LLM cache action card.
+ */
+function LlmCacheDangerCard({ isDeletingLlmCache, onDeleteLlmCache }) {
+  return (
+    <section className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
+      <p className="text-sm font-semibold text-amber-950">Delete LLM cache</p>
+      <p className="mt-2 text-sm leading-6 text-amber-900/85">
+        This removes the downloaded WebLLM model files, configs, and compiled browser artifacts for the supported local models on this site. You will need to download a model again before the next chat session.
+      </p>
+      <button
+        type="button"
+        className="mt-4 rounded-full bg-amber-500 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-amber-200"
+        onClick={() => {
+          void onDeleteLlmCache()
+        }}
+        disabled={isDeletingLlmCache}
+      >
+        {isDeletingLlmCache ? 'Deleting...' : 'Delete LLM cache'}
+      </button>
+    </section>
   )
 }
 

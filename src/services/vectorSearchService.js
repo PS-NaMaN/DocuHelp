@@ -1,6 +1,33 @@
 import { getAllChunks, getAllDocuments } from './db'
 import { logAndRethrow } from '../utils/logger'
 
+const COMMON_QUERY_TERMS = new Set([
+  'what',
+  'which',
+  'when',
+  'where',
+  'who',
+  'whom',
+  'whose',
+  'why',
+  'how',
+  'is',
+  'are',
+  'was',
+  'were',
+  'the',
+  'a',
+  'an',
+  'of',
+  'for',
+  'to',
+  'in',
+  'on',
+  'and',
+  'or',
+  'about',
+])
+
 /**
  * Compute cosine similarity between two dense Float32 vectors.
  *
@@ -39,6 +66,8 @@ export function computeCosineSimilarity(vectorA, vectorB) {
  *
  * @param {Float32Array} queryVector - Embedded user query vector.
  * @param {number} [topK=3] - Maximum number of chunks to return.
+ * @param {string[]} [activeFileNames=[]] - Optional file-scope filter.
+ * @param {string} [queryText=''] - Raw user query used for lexical reranking.
  * @returns {Promise<Array<{
  *   id: number,
  *   documentId: number,
@@ -50,7 +79,7 @@ export function computeCosineSimilarity(vectorA, vectorB) {
  *   citationLabel: string,
  * }>>} Ranked chunk search results.
  */
-export async function searchSimilarChunks(queryVector, topK = 3, activeFileNames = []) {
+export async function searchSimilarChunks(queryVector, topK = 3, activeFileNames = [], queryText = '') {
   try {
     if (!queryVector.length || topK <= 0) {
       return []
@@ -59,18 +88,25 @@ export async function searchSimilarChunks(queryVector, topK = 3, activeFileNames
     const [storedChunks, storedDocuments] = await Promise.all([getAllChunks(), getAllDocuments()])
     const documentNameById = createDocumentNameLookup(storedDocuments)
     const activeFileNameSet = createActiveFileNameSet(activeFileNames)
+    const querySignals = createQuerySignals(queryText)
     const rankedChunks = storedChunks
       .filter((storedChunk) => isComparableChunk(storedChunk, queryVector))
       .filter((storedChunk) => isChunkActive(storedChunk, documentNameById, activeFileNameSet))
-      .map((storedChunk) => createRankedChunkResult(storedChunk, queryVector, documentNameById))
+      .map((storedChunk) =>
+        createRankedChunkResult(storedChunk, queryVector, documentNameById, querySignals),
+      )
       .sort(sortBySimilarityDescending)
+    const filteredRankedChunks = filterRankedChunksForQueryIntent(rankedChunks, querySignals)
 
-    return rankedChunks.slice(0, Math.min(topK, 3))
+    logRetrievalSnapshot(queryText, filteredRankedChunks)
+
+    return filteredRankedChunks.slice(0, Math.min(topK, 3))
   } catch (error) {
     logAndRethrow('searchSimilarChunks', error, {
       topK,
       queryVectorLength: queryVector.length,
       activeFileCount: activeFileNames.length,
+      queryTextLength: queryText.length,
     })
   }
 }
@@ -83,6 +119,28 @@ export async function searchSimilarChunks(queryVector, topK = 3, activeFileNames
  */
 function createActiveFileNameSet(activeFileNames) {
   return new Set(activeFileNames.filter(Boolean))
+}
+
+/**
+ * Extract salient lexical signals from the raw user query for reranking.
+ *
+ * @param {string} queryText - Raw user query text.
+ * @returns {{ salientTerms: string[] }} Normalized lexical query helpers.
+ */
+function createQuerySignals(queryText) {
+  const normalizedQueryText = queryText.toLowerCase().trim()
+  const salientTerms = normalizedQueryText
+    .toLowerCase()
+    .split(/[^a-z0-9]+/i)
+    .filter((queryTerm) => shouldKeepQueryTerm(queryTerm))
+  const uniqueSalientTerms = Array.from(new Set(salientTerms))
+  const distinctiveTerms = uniqueSalientTerms.filter((queryTerm) => queryTerm.length >= 5)
+
+  return {
+    normalizedQueryText,
+    salientTerms: uniqueSalientTerms,
+    distinctiveTerms,
+  }
 }
 
 /**
@@ -159,9 +217,11 @@ function isChunkActive(storedChunk, documentNameById, activeFileNameSet) {
  *   text: string,
  *   tokenCount: number,
  *   embedding: Float32Array,
+ *   fileName?: string,
  * }} storedChunk - Raw chunk record from IndexedDB.
  * @param {Float32Array} queryVector - Embedded user query vector.
  * @param {Map<number, string>} documentNameById - Document name lookup map.
+ * @param {{ salientTerms: string[] }} querySignals - Lexical query helpers.
  * @returns {{
  *   id: number,
  *   documentId: number,
@@ -170,13 +230,19 @@ function isChunkActive(storedChunk, documentNameById, activeFileNameSet) {
  *   text: string,
  *   tokenCount: number,
  *   similarity: number,
+ *   semanticSimilarity: number,
+ *   lexicalSimilarity: number,
+ *   matchedTerms: string[],
  *   citationLabel: string,
  * }} Ranked search result.
  */
-function createRankedChunkResult(storedChunk, queryVector, documentNameById) {
+function createRankedChunkResult(storedChunk, queryVector, documentNameById, querySignals) {
   const documentName =
     storedChunk.fileName ?? documentNameById.get(storedChunk.documentId) ?? 'Unknown document'
-  const similarity = computeCosineSimilarity(queryVector, storedChunk.embedding)
+  const semanticSimilarity = computeCosineSimilarity(queryVector, storedChunk.embedding)
+  const lexicalSimilarity = computeLexicalRerankScore(storedChunk, documentName, querySignals)
+  const matchedTerms = findMatchedQueryTerms(storedChunk, documentName, querySignals)
+  const similarity = semanticSimilarity + lexicalSimilarity
 
   return {
     id: storedChunk.id,
@@ -186,8 +252,134 @@ function createRankedChunkResult(storedChunk, queryVector, documentNameById) {
     text: storedChunk.text,
     tokenCount: storedChunk.tokenCount,
     similarity,
+    semanticSimilarity,
+    lexicalSimilarity,
+    matchedTerms,
     citationLabel: createCitationLabel(documentName, storedChunk.chunkIndex),
   }
+}
+
+/**
+ * Compute a small lexical rerank score so named entities favor matching chunks and filenames.
+ *
+ * @param {{ text: string }} storedChunk - Stored chunk record.
+ * @param {string} documentName - Parent document name.
+ * @param {{ normalizedQueryText: string, salientTerms: string[], distinctiveTerms: string[] }} querySignals - Lexical query helpers.
+ * @returns {number} Additive rerank score applied on top of semantic similarity.
+ */
+function computeLexicalRerankScore(storedChunk, documentName, querySignals) {
+  if (!querySignals.salientTerms.length) {
+    return 0
+  }
+
+  const normalizedChunkText = storedChunk.text.toLowerCase()
+  const normalizedDocumentName = documentName.toLowerCase()
+  const matchedTerms = findMatchedTermsInNormalizedContent(
+    normalizedChunkText,
+    normalizedDocumentName,
+    querySignals.salientTerms,
+  )
+  const matchedDistinctiveTerms = findMatchedTermsInNormalizedContent(
+    normalizedChunkText,
+    normalizedDocumentName,
+    querySignals.distinctiveTerms,
+  )
+  const containsWholeQuery = containsWholeQueryPhrase(
+    normalizedChunkText,
+    normalizedDocumentName,
+    querySignals.normalizedQueryText,
+  )
+
+  if (!matchedTerms.length) {
+    return querySignals.distinctiveTerms.length ? -0.35 : -0.2
+  }
+
+  const documentNameMatchesDistinctiveTerm = matchedDistinctiveTerms.some((queryTerm) =>
+    normalizedDocumentName.includes(queryTerm),
+  )
+  const chunkTextMatchesDistinctiveTerm = matchedDistinctiveTerms.some((queryTerm) =>
+    normalizedChunkText.includes(queryTerm),
+  )
+
+  return (
+    matchedTerms.length * 0.1 +
+    matchedDistinctiveTerms.length * 0.28 +
+    (documentNameMatchesDistinctiveTerm ? 0.45 : 0) +
+    (chunkTextMatchesDistinctiveTerm ? 0.18 : 0) +
+    (containsWholeQuery ? 0.3 : 0)
+  )
+}
+
+/**
+ * Find which query terms actually appear in the chunk text or the document name.
+ *
+ * @param {{ text: string }} storedChunk - Stored chunk record.
+ * @param {string} documentName - Parent document name.
+ * @param {{ salientTerms: string[] }} querySignals - Lexical query helpers.
+ * @returns {string[]} Query terms found in the candidate source.
+ */
+function findMatchedQueryTerms(storedChunk, documentName, querySignals) {
+  return findMatchedTermsInNormalizedContent(
+    storedChunk.text.toLowerCase(),
+    documentName.toLowerCase(),
+    querySignals.salientTerms,
+  )
+}
+
+/**
+ * Find the subset of target terms that appear in either the chunk text or the document name.
+ *
+ * @param {string} normalizedChunkText - Lower-cased chunk text.
+ * @param {string} normalizedDocumentName - Lower-cased document name.
+ * @param {string[]} targetTerms - Candidate query terms.
+ * @returns {string[]} Matched terms.
+ */
+function findMatchedTermsInNormalizedContent(
+  normalizedChunkText,
+  normalizedDocumentName,
+  targetTerms,
+) {
+  return targetTerms.filter(
+    (targetTerm) =>
+      normalizedChunkText.includes(targetTerm) || normalizedDocumentName.includes(targetTerm),
+  )
+}
+
+/**
+ * Check whether the full normalized query phrase appears inside the chunk or document name.
+ *
+ * @param {string} normalizedChunkText - Lower-cased chunk text.
+ * @param {string} normalizedDocumentName - Lower-cased document name.
+ * @param {string} normalizedQueryText - Lower-cased user query.
+ * @returns {boolean} True when the whole query appears as a phrase.
+ */
+function containsWholeQueryPhrase(
+  normalizedChunkText,
+  normalizedDocumentName,
+  normalizedQueryText,
+) {
+  if (!normalizedQueryText || normalizedQueryText.length < 5) {
+    return false
+  }
+
+  return (
+    normalizedChunkText.includes(normalizedQueryText) ||
+    normalizedDocumentName.includes(normalizedQueryText)
+  )
+}
+
+/**
+ * Decide whether a token from the user query is meaningful enough for lexical reranking.
+ *
+ * @param {string} queryTerm - One token from the normalized query text.
+ * @returns {boolean} True when the token should influence reranking.
+ */
+function shouldKeepQueryTerm(queryTerm) {
+  if (queryTerm.length >= 3 && !COMMON_QUERY_TERMS.has(queryTerm)) {
+    return true
+  }
+
+  return queryTerm === 'ai'
 }
 
 /**
@@ -199,6 +391,77 @@ function createRankedChunkResult(storedChunk, queryVector, documentNameById) {
  */
 function createCitationLabel(documentName, chunkIndex) {
   return `${documentName} / chunk ${chunkIndex + 1}`
+}
+
+/**
+ * Reduce noisy retrieval results when the query includes distinctive named terms.
+ *
+ * @param {Array<{
+ *   similarity: number,
+ *   semanticSimilarity: number,
+ *   lexicalSimilarity: number,
+ *   matchedTerms: string[],
+ * }>} rankedChunks - Ranked retrieval candidates.
+ * @param {{ distinctiveTerms: string[] }} querySignals - Lexical query helpers.
+ * @returns {Array<{
+ *   similarity: number,
+ *   semanticSimilarity: number,
+ *   lexicalSimilarity: number,
+ *   matchedTerms: string[],
+ * }>} Filtered candidates ready for the final top-K slice.
+ */
+function filterRankedChunksForQueryIntent(rankedChunks, querySignals) {
+  if (!rankedChunks.length) {
+    return rankedChunks
+  }
+
+  const distinctiveMatches = rankedChunks.filter((rankedChunk) =>
+    querySignals.distinctiveTerms.some((queryTerm) => rankedChunk.matchedTerms.includes(queryTerm)),
+  )
+
+  if (distinctiveMatches.length) {
+    return distinctiveMatches
+  }
+
+  const meaningfullyRankedChunks = rankedChunks.filter(
+    (rankedChunk) => rankedChunk.similarity > 0.18 || rankedChunk.matchedTerms.length > 0,
+  )
+
+  return meaningfullyRankedChunks.length ? meaningfullyRankedChunks : rankedChunks
+}
+
+/**
+ * Log a compact retrieval snapshot so ranking mistakes are visible in the browser console.
+ *
+ * @param {string} queryText - Raw user query.
+ * @param {Array<{
+ *   documentName: string,
+ *   chunkIndex: number,
+ *   similarity: number,
+ *   semanticSimilarity: number,
+ *   lexicalSimilarity: number,
+ *   matchedTerms: string[],
+ * }>} rankedChunks - Filtered retrieval candidates.
+ * @returns {void}
+ */
+function logRetrievalSnapshot(queryText, rankedChunks) {
+  if (!rankedChunks.length) {
+    console.warn('[DocuHelp] Retrieval returned no eligible chunks.', {
+      queryText,
+    })
+    return
+  }
+
+  console.table(
+    rankedChunks.slice(0, 5).map((rankedChunk) => ({
+      document: rankedChunk.documentName,
+      chunk: rankedChunk.chunkIndex + 1,
+      score: rankedChunk.similarity.toFixed(3),
+      semantic: rankedChunk.semanticSimilarity.toFixed(3),
+      lexical: rankedChunk.lexicalSimilarity.toFixed(3),
+      matchedTerms: rankedChunk.matchedTerms.join(', '),
+    })),
+  )
 }
 
 /**

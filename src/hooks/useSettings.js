@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { DEFAULT_WEB_LLM_MODEL_ID, getSupportedModelIds } from '../services/llmService'
 import { logFunctionError } from '../utils/logger'
 
 const OCR_SCALE_STORAGE_KEY = 'docuhelp:ocr-scale'
 const GENERATION_SETTINGS_STORAGE_KEY = 'docuhelp:generation-settings'
+const SELECTED_MODEL_STORAGE_KEY = 'docuhelp:selected-model-id'
 const DEFAULT_OCR_SCALE = 2
 const MIN_OCR_SCALE = 0.5
 const MAX_OCR_SCALE = 5
@@ -21,6 +23,8 @@ const DEFAULT_GENERATION_SETTINGS = {
  * @returns {{
  *   ocrScale: number,
  *   setOcrScale: (nextOcrScale: number | string) => void,
+ *   selectedModelId: string,
+ *   setSelectedModelId: (nextModelId: string) => void,
  *   generationSettings: {
  *     temperature: number,
  *     topP: number,
@@ -34,11 +38,16 @@ const DEFAULT_GENERATION_SETTINGS = {
  */
 export function useSettings() {
   const [ocrScale, setOcrScaleState] = useState(readStoredOcrScale)
+  const [selectedModelId, setSelectedModelIdState] = useState(readStoredSelectedModelId)
   const [generationSettings, setGenerationSettingsState] = useState(readStoredGenerationSettings)
 
   useEffect(() => {
     writeStoredOcrScale(ocrScale)
   }, [ocrScale])
+
+  useEffect(() => {
+    writeStoredSelectedModelId(selectedModelId)
+  }, [selectedModelId])
 
   useEffect(() => {
     writeStoredGenerationSettings(generationSettings)
@@ -52,6 +61,16 @@ export function useSettings() {
    */
   function setOcrScale(nextOcrScale) {
     setOcrScaleState(normalizeOcrScale(nextOcrScale))
+  }
+
+  /**
+   * Persist the selected supported local model id.
+   *
+   * @param {string} nextModelId - Requested supported model id.
+   * @returns {void}
+   */
+  function setSelectedModelId(nextModelId) {
+    setSelectedModelIdState(normalizeSelectedModelId(nextModelId))
   }
 
   /**
@@ -75,6 +94,8 @@ export function useSettings() {
   return {
     ocrScale,
     setOcrScale,
+    selectedModelId,
+    setSelectedModelId,
     generationSettings,
     updateGenerationSetting,
   }
@@ -102,6 +123,31 @@ function readStoredOcrScale() {
     logFunctionError('useSettings.readStoredOcrScale', error)
 
     return DEFAULT_OCR_SCALE
+  }
+}
+
+/**
+ * Read the stored selected model id from localStorage with a safe supported-model fallback.
+ *
+ * @returns {string} Stored or default supported model id.
+ */
+function readStoredSelectedModelId() {
+  try {
+    if (typeof window === 'undefined') {
+      return DEFAULT_WEB_LLM_MODEL_ID
+    }
+
+    const storedSelectedModelId = window.localStorage.getItem(SELECTED_MODEL_STORAGE_KEY)
+
+    if (!storedSelectedModelId) {
+      return DEFAULT_WEB_LLM_MODEL_ID
+    }
+
+    return normalizeSelectedModelId(storedSelectedModelId)
+  } catch (error) {
+    logFunctionError('useSettings.readStoredSelectedModelId', error)
+
+    return DEFAULT_WEB_LLM_MODEL_ID
   }
 }
 
@@ -160,6 +206,26 @@ function writeStoredOcrScale(ocrScale) {
 }
 
 /**
+ * Persist the selected model id to localStorage for future page loads.
+ *
+ * @param {string} selectedModelId - Current selected model id preference.
+ * @returns {void}
+ */
+function writeStoredSelectedModelId(selectedModelId) {
+  try {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, selectedModelId)
+  } catch (error) {
+    logFunctionError('useSettings.writeStoredSelectedModelId', error, {
+      selectedModelId,
+    })
+  }
+}
+
+/**
  * Persist generation settings to localStorage for future page loads.
  *
  * @param {Record<string, number>} generationSettings - Current generation settings object.
@@ -196,6 +262,22 @@ function normalizeOcrScale(rawOcrScale) {
   }
 
   return Math.max(MIN_OCR_SCALE, Math.min(MAX_OCR_SCALE, parsedOcrScale))
+}
+
+/**
+ * Normalize a requested model id against the supported curated list.
+ *
+ * @param {string} rawModelId - Untrusted model id.
+ * @returns {string} Supported model id.
+ */
+function normalizeSelectedModelId(rawModelId) {
+  const supportedModelIds = getSupportedModelIds()
+
+  if (supportedModelIds.includes(rawModelId)) {
+    return rawModelId
+  }
+
+  return DEFAULT_WEB_LLM_MODEL_ID
 }
 
 /**

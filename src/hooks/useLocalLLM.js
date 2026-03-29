@@ -4,6 +4,7 @@ import {
   DEFAULT_WEB_LLM_MODEL_ID,
   getActiveEngine,
   initializeEngine as initializeLocalEngine,
+  unloadActiveEngine,
 } from '../services/llmService'
 import { logFunctionError } from '../utils/logger'
 
@@ -23,7 +24,8 @@ import { logFunctionError } from '../utils/logger'
  *   isReady: boolean,
  *   errorMessage: string,
  *   initializeModel: (requestedModelId?: string) => Promise<import('@mlc-ai/web-llm').MLCEngine | null>,
- * }} Hook state and model initialization trigger.
+ *   unloadModel: () => Promise<void>,
+ * }} Hook state and model lifecycle actions.
  */
 export function useLocalLLM(options = {}) {
   const {
@@ -143,6 +145,36 @@ export function useLocalLLM(options = {}) {
   }
 
   /**
+   * Unload the currently active local model and reset the loader state.
+   *
+   * @returns {Promise<void>} Resolves when the active engine has been released.
+   */
+  async function unloadModel() {
+    try {
+      await unloadActiveEngine()
+
+      if (isDisposedRef.current) {
+        return
+      }
+
+      setEngine(null)
+      setIsReady(false)
+      setIsLoading(false)
+      setErrorMessage('')
+      setProgressText('Local model cache cleared. Initialize a model to continue.')
+      setProgressValue(0)
+    } catch (error) {
+      logFunctionError('useLocalLLM.unloadModel', error)
+
+      if (isDisposedRef.current) {
+        return
+      }
+
+      setErrorMessage(getReadableErrorMessage(error, 'Unable to unload the local model.'))
+    }
+  }
+
+  /**
    * Mirror raw WebLLM progress reports into simple loader UI state.
    *
    * @param {{ text: string, progress: number }} progressReport - Raw WebLLM progress update.
@@ -166,6 +198,7 @@ export function useLocalLLM(options = {}) {
     isReady,
     errorMessage,
     initializeModel,
+    unloadModel,
   }
 }
 
