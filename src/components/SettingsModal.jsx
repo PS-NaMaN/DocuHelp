@@ -1,30 +1,38 @@
-/**
- * Render the settings modal for OCR preferences, local storage actions, and LLM controls.
- *
- * @param {{
- *   isDeletingLlmCache: boolean,
- *   isDeletingIndexedData: boolean,
- *   isChangingModel: boolean,
- *   currentModelId: string,
- *   availableModels: Array<{ id: string, label: string, description: string }>,
- *   ocrScale: number,
- *   generationSettings: {
- *     temperature: number,
- *     topP: number,
- *     maxTokens: number,
- *     presencePenalty: number,
- *     frequencyPenalty: number,
- *     repetitionPenalty: number,
- *   },
- *   onClose: () => void,
- *   onDeleteLlmCache: () => Promise<void>,
- *   onDeleteIndexedData: () => Promise<void>,
- *   onChangeOcrScale: (nextOcrScale: number | string) => void,
- *   onChangeGenerationSetting: (settingName: string, nextValue: number | string) => void,
- *   onChangeModel: (modelId: string) => Promise<void>,
- * }} props - Settings values and actions.
- * @returns {JSX.Element} The modal overlay.
- */
+const THEME_OPTIONS = [
+  {
+    id: 'light',
+    label: 'Light',
+    description: 'Soft neutral surfaces with a teal accent.',
+  },
+  {
+    id: 'dark',
+    label: 'Dark',
+    description: 'Low-glare surfaces with the same accent system.',
+  },
+  {
+    id: 'amoled',
+    label: 'Amoled',
+    description: 'True black surfaces with bright text to better suit OLED devices.',
+  },
+  {
+    id: 'custom',
+    label: 'Custom',
+    description: 'Pick your own background, surface, text, and accent colors.',
+  },
+]
+
+const CUSTOM_THEME_FIELDS = [
+  { key: 'appBg', label: 'App Background' },
+  { key: 'panelBg', label: 'Sidebar Surface' },
+  { key: 'panelMuted', label: 'Muted Surface' },
+  { key: 'panelStrong', label: 'Strong Surface' },
+  { key: 'textPrimary', label: 'Primary Text' },
+  { key: 'textSecondary', label: 'Secondary Text' },
+  { key: 'textMuted', label: 'Muted Text' },
+  { key: 'accent', label: 'Accent' },
+  { key: 'accentContrast', label: 'Accent Contrast' },
+]
+
 function SettingsModal({
   isDeletingLlmCache,
   isDeletingIndexedData,
@@ -32,57 +40,71 @@ function SettingsModal({
   currentModelId,
   availableModels,
   ocrScale,
+  themeName,
+  customThemeTokens,
   generationSettings,
   onClose,
   onDeleteLlmCache,
   onDeleteIndexedData,
   onChangeOcrScale,
+  onChangeTheme,
+  onChangeCustomThemeToken,
   onChangeGenerationSetting,
   onChangeModel,
 }) {
-  /**
-   * Close the modal when the user clicks on the overlay.
-   *
-   * @returns {void}
-   */
-  function handleOverlayClick() {
-    onClose()
-  }
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-stone-950/55 px-4 py-6 backdrop-blur-sm"
-      onClick={handleOverlayClick}
+      className="fixed inset-0 z-50 flex items-center justify-center px-4 py-6 backdrop-blur-sm"
+      style={{ background: 'rgba(15, 23, 42, 0.42)' }}
+      onClick={onClose}
     >
       <div
-        className="flex max-h-[min(90vh,900px)] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-[0_30px_120px_rgba(28,25,23,0.22)]"
+        className="flex max-h-[min(90vh,900px)] w-full max-w-2xl flex-col overflow-hidden rounded-[2rem] border"
+        style={{
+          borderColor: 'var(--panel-border)',
+          background: 'var(--panel-strong)',
+          color: 'var(--text-primary)',
+          boxShadow: 'var(--panel-shadow)',
+        }}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="flex-shrink-0 border-b border-stone-100 p-8 pb-6">
+        <div className="flex-shrink-0 border-b p-8 pb-6" style={{ borderColor: 'var(--panel-border)' }}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-cyan-700">
+              <p
+                className="text-xs font-semibold uppercase tracking-[0.24em]"
+                style={{ color: 'var(--accent)' }}
+              >
                 Settings
               </p>
-              <h3 className="mt-3 font-serif text-3xl leading-tight text-stone-950">
-                Local processing controls
-              </h3>
+              <h3 className="mt-3 font-serif text-3xl leading-tight">Local processing controls</h3>
             </div>
             <button
               type="button"
-              className="rounded-full border border-stone-200 bg-white px-4 py-2 text-sm font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50"
+              className="rounded-full border px-4 py-2 text-sm font-semibold transition"
+              style={{
+                borderColor: 'var(--panel-border)',
+                background: 'var(--panel-muted)',
+                color: 'var(--text-secondary)',
+              }}
               onClick={onClose}
               disabled={isDeletingIndexedData || isDeletingLlmCache || isChangingModel}
             >
               Close
             </button>
           </div>
-          <p className="mt-4 text-sm leading-6 text-stone-600">
-            Tune OCR behavior, switch between supported local models, and manage the browser data that DocuHelp stores on this site.
+          <p className="mt-4 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+            Tune OCR behavior, choose a theme, customize the color tokens, select supported local models, and manage browser data stored by DocuHelp.
           </p>
         </div>
 
-        <div className="flex-1 space-y-6 overflow-y-auto p-8 pt-6">
+        <div className="docuhelp-scrollbar flex-1 space-y-6 overflow-y-auto p-8 pt-6">
+          <ThemeSettingsCard
+            themeName={themeName}
+            customThemeTokens={customThemeTokens}
+            onChangeTheme={onChangeTheme}
+            onChangeCustomThemeToken={onChangeCustomThemeToken}
+          />
           <OcrSettingsCard ocrScale={ocrScale} onChangeOcrScale={onChangeOcrScale} />
           <ModelSettingsCard
             currentModelId={currentModelId}
@@ -106,20 +128,92 @@ function SettingsModal({
   )
 }
 
-/**
- * Render OCR scale controls.
- *
- * @param {{
- *   ocrScale: number,
- *   onChangeOcrScale: (nextOcrScale: number | string) => void,
- * }} props - OCR setting value and setter.
- * @returns {JSX.Element} OCR settings card.
- */
+function ThemeSettingsCard({
+  themeName,
+  customThemeTokens,
+  onChangeTheme,
+  onChangeCustomThemeToken,
+}) {
+  return (
+    <section className="rounded-[1.5rem] border p-5" style={createCardStyle('muted')}>
+      <p className="text-sm font-semibold">Theme</p>
+      <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+        Choose from built-in themes or switch to Custom to control your own theme tokens.
+      </p>
+
+      <div className="mt-4 grid gap-3 md:grid-cols-2">
+        {THEME_OPTIONS.map((themeOption) => (
+          <button
+            key={themeOption.id}
+            type="button"
+            className="rounded-[1.2rem] border p-4 text-left transition"
+            style={{
+              borderColor: themeOption.id === themeName ? 'var(--accent)' : 'var(--panel-border)',
+              background: themeOption.id === themeName ? 'var(--accent-soft)' : 'var(--panel-strong)',
+            }}
+            onClick={() => onChangeTheme(themeOption.id)}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold">{themeOption.label}</p>
+                <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+                  {themeOption.description}
+                </p>
+              </div>
+              <span
+                className="rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em]"
+                style={{
+                  background: themeOption.id === themeName ? 'var(--accent)' : 'var(--panel-muted)',
+                  color:
+                    themeOption.id === themeName
+                      ? 'var(--accent-contrast)'
+                      : 'var(--text-muted)',
+                }}
+              >
+                {themeOption.id === themeName ? 'Active' : 'Select'}
+              </span>
+            </div>
+          </button>
+        ))}
+      </div>
+
+      {themeName === 'custom' ? (
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          {CUSTOM_THEME_FIELDS.map((field) => (
+            <label
+              key={field.key}
+              className="rounded-[1.2rem] border p-4"
+              style={createCardStyle('strong')}
+            >
+              <span className="text-sm font-semibold">{field.label}</span>
+              <div className="mt-3 flex items-center gap-3">
+                <input
+                  type="color"
+                  value={customThemeTokens[field.key]}
+                  onChange={(event) => onChangeCustomThemeToken(field.key, event.target.value)}
+                  className="h-10 w-12 cursor-pointer rounded border-0 bg-transparent p-0"
+                />
+                <input
+                  type="text"
+                  value={customThemeTokens[field.key]}
+                  onChange={(event) => onChangeCustomThemeToken(field.key, event.target.value)}
+                  className="w-full rounded-xl border px-4 py-3 text-sm outline-none transition"
+                  style={createInputStyle()}
+                />
+              </div>
+            </label>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  )
+}
+
 function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
   return (
-    <section className="rounded-[1.5rem] border border-stone-200 bg-stone-50 p-5">
-      <p className="text-sm font-semibold text-stone-900">OCR Processing Scale</p>
-      <p className="mt-2 text-sm leading-6 text-stone-600">
+    <section className="rounded-[1.5rem] border p-5" style={createCardStyle('muted')}>
+      <p className="text-sm font-semibold">OCR Processing Scale</p>
+      <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
         Higher scales improve reading of blurry or scanned text, but they also increase memory use and processing time.
       </p>
 
@@ -131,7 +225,8 @@ function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
           step="0.05"
           value={ocrScale}
           onChange={(event) => onChangeOcrScale(event.target.value)}
-          className="w-full accent-cyan-600"
+          className="w-full"
+          style={{ accentColor: 'var(--accent)' }}
         />
         <input
           type="number"
@@ -140,33 +235,14 @@ function OcrSettingsCard({ ocrScale, onChangeOcrScale }) {
           step="0.05"
           value={ocrScale.toFixed(2)}
           onChange={(event) => onChangeOcrScale(event.target.value)}
-          className="rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-cyan-400"
+          className="rounded-xl border px-4 py-3 text-sm outline-none transition"
+          style={createInputStyle()}
         />
       </div>
     </section>
   )
 }
 
-/**
- * Render current model details and the supported-model chooser.
- *
- * @param {{
- *   currentModelId: string,
- *   availableModels: Array<{ id: string, label: string, description: string }>,
- *   generationSettings: {
- *     temperature: number,
- *     topP: number,
- *     maxTokens: number,
- *     presencePenalty: number,
- *     frequencyPenalty: number,
- *     repetitionPenalty: number,
- *   },
- *   isChangingModel: boolean,
- *   onChangeGenerationSetting: (settingName: string, nextValue: number | string) => void,
- *   onChangeModel: (modelId: string) => Promise<void>,
- * }} props - Model UI state and actions.
- * @returns {JSX.Element} Model settings card.
- */
 function ModelSettingsCard({
   currentModelId,
   availableModels,
@@ -178,20 +254,30 @@ function ModelSettingsCard({
   const currentModelOption = availableModels.find((modelOption) => modelOption.id === currentModelId)
 
   return (
-    <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5">
+    <section className="rounded-[1.5rem] border p-5" style={createCardStyle('strong')}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-stone-900">Active LLM Engine</p>
-          <p className="mt-2 text-base font-semibold text-stone-950">
+          <p className="text-sm font-semibold">Active LLM Engine</p>
+          <p className="mt-2 text-base font-semibold">
             {currentModelOption?.label ?? currentModelId}
           </p>
-          <p className="mt-2 break-all text-sm leading-6 text-stone-600">{currentModelId}</p>
+          <p className="mt-2 break-all text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+            {currentModelId}
+          </p>
           {currentModelOption?.description ? (
-            <p className="mt-2 text-sm leading-6 text-stone-500">{currentModelOption.description}</p>
+            <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-muted)' }}>
+              {currentModelOption.description}
+            </p>
           ) : null}
         </div>
 
-        <span className="rounded-full bg-cyan-50 px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-700">
+        <span
+          className="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+          style={{
+            background: isChangingModel ? 'var(--warning-soft)' : 'var(--accent-soft)',
+            color: isChangingModel ? 'var(--warning-text)' : 'var(--accent)',
+          }}
+        >
           {isChangingModel ? 'Loading' : 'Supported'}
         </span>
       </div>
@@ -268,26 +354,15 @@ function ModelSettingsCard({
   )
 }
 
-/**
- * Render one supported model card inside the model chooser.
- *
- * @param {{
- *   modelOption: { id: string, label: string, description: string },
- *   isActive: boolean,
- *   isChangingModel: boolean,
- *   onChangeModel: (modelId: string) => Promise<void>,
- * }} props - Supported model card props.
- * @returns {JSX.Element} One model option card.
- */
 function ModelOptionCard({ modelOption, isActive, isChangingModel, onChangeModel }) {
   return (
     <button
       type="button"
-      className={`w-full rounded-[1.3rem] border px-4 py-4 text-left transition ${
-        isActive
-          ? 'border-cyan-300 bg-cyan-50'
-          : 'border-stone-200 bg-stone-50 hover:border-cyan-300 hover:bg-cyan-50/60'
-      }`}
+      className="w-full rounded-[1.3rem] border px-4 py-4 text-left transition"
+      style={{
+        borderColor: isActive ? 'var(--accent)' : 'var(--panel-border)',
+        background: isActive ? 'var(--accent-soft)' : 'var(--panel-muted)',
+      }}
       onClick={() => {
         if (isActive) {
           return
@@ -299,18 +374,20 @@ function ModelOptionCard({ modelOption, isActive, isChangingModel, onChangeModel
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-stone-950">{modelOption.label}</p>
-          <p className="mt-2 break-all text-xs uppercase tracking-[0.16em] text-stone-500">
+          <p className="text-sm font-semibold">{modelOption.label}</p>
+          <p className="mt-2 break-all text-xs uppercase tracking-[0.16em]" style={{ color: 'var(--text-muted)' }}>
             {modelOption.id}
           </p>
-          <p className="mt-3 text-sm leading-6 text-stone-600">{modelOption.description}</p>
+          <p className="mt-3 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
+            {modelOption.description}
+          </p>
         </div>
         <span
-          className={`rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] ${
-            isActive
-              ? 'bg-cyan-600 text-white'
-              : 'bg-white text-stone-600'
-          }`}
+          className="rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em]"
+          style={{
+            background: isActive ? 'var(--accent)' : 'var(--panel-strong)',
+            color: isActive ? 'var(--accent-contrast)' : 'var(--text-secondary)',
+          }}
         >
           {isActive ? 'Active' : isChangingModel ? 'Loading' : 'Load'}
         </span>
@@ -319,25 +396,13 @@ function ModelOptionCard({ modelOption, isActive, isChangingModel, onChangeModel
   )
 }
 
-/**
- * Render one numeric generation setting input with supporting copy.
- *
- * @param {{
- *   label: string,
- *   helperText: string,
- *   value: number,
- *   min: string,
- *   max: string,
- *   step: string,
- *   onChange: (nextValue: string) => void,
- * }} props - One generation setting field.
- * @returns {JSX.Element} A labeled numeric input block.
- */
 function GenerationSettingInput({ label, helperText, value, min, max, step, onChange }) {
   return (
-    <label className="rounded-[1.2rem] border border-stone-200 bg-stone-50 p-4">
-      <span className="text-sm font-semibold text-stone-900">{label}</span>
-      <span className="mt-2 block text-sm leading-6 text-stone-500">{helperText}</span>
+    <label className="rounded-[1.2rem] border p-4" style={createCardStyle('muted')}>
+      <span className="text-sm font-semibold">{label}</span>
+      <span className="mt-2 block text-sm leading-6" style={{ color: 'var(--text-muted)' }}>
+        {helperText}
+      </span>
       <input
         type="number"
         min={min}
@@ -345,31 +410,29 @@ function GenerationSettingInput({ label, helperText, value, min, max, step, onCh
         step={step}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="mt-3 w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-cyan-400"
+        className="mt-3 w-full rounded-xl border px-4 py-3 text-sm outline-none transition"
+        style={createInputStyle()}
       />
     </label>
   )
 }
 
-/**
- * Render the destructive local LLM cache action.
- *
- * @param {{
- *   isDeletingLlmCache: boolean,
- *   onDeleteLlmCache: () => Promise<void>,
- * }} props - LLM cache delete state and action.
- * @returns {JSX.Element} LLM cache action card.
- */
 function LlmCacheDangerCard({ isDeletingLlmCache, onDeleteLlmCache }) {
   return (
-    <section className="rounded-[1.5rem] border border-amber-200 bg-amber-50 p-5">
-      <p className="text-sm font-semibold text-amber-950">Delete LLM cache</p>
-      <p className="mt-2 text-sm leading-6 text-amber-900/85">
+    <section className="rounded-[1.5rem] border p-5" style={createDangerCardStyle('warning')}>
+      <p className="text-sm font-semibold" style={{ color: 'var(--warning-text)' }}>
+        Delete LLM cache
+      </p>
+      <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
         This removes the downloaded WebLLM model files, configs, and compiled browser artifacts for the supported local models on this site. You will need to download a model again before the next chat session.
       </p>
       <button
         type="button"
-        className="mt-4 rounded-full bg-amber-500 px-5 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-400 disabled:cursor-not-allowed disabled:bg-amber-200"
+        className="mt-4 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45"
+        style={{
+          background: 'var(--warning-text)',
+          color: 'var(--panel-strong)',
+        }}
         onClick={() => {
           void onDeleteLlmCache()
         }}
@@ -381,25 +444,22 @@ function LlmCacheDangerCard({ isDeletingLlmCache, onDeleteLlmCache }) {
   )
 }
 
-/**
- * Render the destructive indexed data section.
- *
- * @param {{
- *   isDeletingIndexedData: boolean,
- *   onDeleteIndexedData: () => Promise<void>,
- * }} props - Indexed data delete state and action.
- * @returns {JSX.Element} Indexed data action card.
- */
 function IndexedDataDangerCard({ isDeletingIndexedData, onDeleteIndexedData }) {
   return (
-    <section className="rounded-[1.5rem] border border-rose-200 bg-rose-50 p-5">
-      <p className="text-sm font-semibold text-rose-900">Delete indexed data</p>
-      <p className="mt-2 text-sm leading-6 text-rose-800/85">
+    <section className="rounded-[1.5rem] border p-5" style={createDangerCardStyle('danger')}>
+      <p className="text-sm font-semibold" style={{ color: 'var(--danger-text)' }}>
+        Delete indexed data
+      </p>
+      <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
         This clears all uploaded document records, chunks, and embeddings stored in IndexedDB by this site. It does not affect files outside this browser.
       </p>
       <button
         type="button"
-        className="mt-4 rounded-full bg-rose-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-rose-300"
+        className="mt-4 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45"
+        style={{
+          background: 'var(--danger-text)',
+          color: 'var(--panel-strong)',
+        }}
         onClick={() => {
           void onDeleteIndexedData()
         }}
@@ -409,6 +469,35 @@ function IndexedDataDangerCard({ isDeletingIndexedData, onDeleteIndexedData }) {
       </button>
     </section>
   )
+}
+
+function createCardStyle(tone) {
+  return {
+    borderColor: 'var(--panel-border)',
+    background: tone === 'strong' ? 'var(--panel-elevated)' : 'var(--panel-muted)',
+  }
+}
+
+function createDangerCardStyle(tone) {
+  if (tone === 'warning') {
+    return {
+      borderColor: 'var(--warning-soft)',
+      background: 'var(--warning-soft)',
+    }
+  }
+
+  return {
+    borderColor: 'var(--danger-soft)',
+    background: 'var(--danger-soft)',
+  }
+}
+
+function createInputStyle() {
+  return {
+    borderColor: 'var(--panel-border)',
+    background: 'var(--panel-strong)',
+    color: 'var(--text-primary)',
+  }
 }
 
 export default SettingsModal

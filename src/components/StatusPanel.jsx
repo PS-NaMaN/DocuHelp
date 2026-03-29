@@ -6,9 +6,22 @@
  */
 function StatCard({ label, value }) {
   return (
-    <div className="rounded-[1.2rem] border border-stone-200 bg-white px-4 py-3">
-      <p className="text-[10px] uppercase font-bold tracking-widest text-stone-500">{label}</p>
-      <p className="mt-2 text-2xl font-semibold text-stone-950">{value}</p>
+    <div
+      className="rounded-[1.2rem] border px-4 py-3"
+      style={{
+        borderColor: 'var(--panel-border)',
+        background: 'var(--panel-strong)',
+      }}
+    >
+      <p
+        className="text-[10px] font-bold uppercase tracking-widest"
+        style={{ color: 'var(--text-muted)' }}
+      >
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold" style={{ color: 'var(--text-primary)' }}>
+        {value}
+      </p>
     </div>
   )
 }
@@ -31,21 +44,44 @@ function StatusPanel({
   errorMessage,
 }) {
   return (
-    <section className="rounded-[1.5rem] border border-stone-200 bg-stone-50/80 p-5">
+    <section
+      className="rounded-[1.5rem] border p-5"
+      style={{
+        borderColor: 'var(--panel-border)',
+        background: 'var(--panel-muted)',
+      }}
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-stone-900">Index status</p>
-          <p className="mt-1 text-xs leading-5 text-stone-600">{ingestionProgress.message}</p>
+          <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Index status
+          </p>
+          <p className="mt-1 text-xs leading-5" style={{ color: 'var(--text-secondary)' }}>
+            {ingestionProgress.message}
+          </p>
         </div>
-        <span className="flex-shrink-0 rounded-full bg-white border border-stone-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-stone-500">
+        <span
+          className="flex-shrink-0 rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-wider"
+          style={{
+            borderColor: 'var(--panel-border)',
+            background: 'var(--panel-strong)',
+            color: 'var(--text-muted)',
+          }}
+        >
           {ingestionProgress.stage}
         </span>
       </div>
 
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-stone-200">
+      <div
+        className="mt-4 h-2 overflow-hidden rounded-full"
+        style={{ background: 'var(--panel-border)' }}
+      >
         <div
-          className="h-full rounded-full bg-[linear-gradient(90deg,_#0891b2,_#f97316)] transition-all duration-500"
-          style={{ width: `${progressPercentage}%` }}
+          className="h-full rounded-full transition-all duration-500"
+          style={{
+            width: `${progressPercentage}%`,
+            background: 'linear-gradient(90deg, var(--accent), var(--accent-strong))',
+          }}
         />
       </div>
 
@@ -55,13 +91,20 @@ function StatusPanel({
       </div>
 
       {ingestionProgress.fileName ? (
-        <p className="mt-4 truncate text-sm text-stone-500">
-          Working on <span className="font-medium text-stone-700">{ingestionProgress.fileName}</span>
+        <p className="mt-4 truncate text-sm" style={{ color: 'var(--text-secondary)' }}>
+          Working on <span style={{ color: 'var(--text-primary)' }}>{ingestionProgress.fileName}</span>
         </p>
       ) : null}
 
       {errorMessage ? (
-        <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+        <p
+          className="mt-4 rounded-xl border px-4 py-3 text-sm"
+          style={{
+            borderColor: 'var(--danger-soft)',
+            background: 'var(--danger-soft)',
+            color: 'var(--danger-text)',
+          }}
+        >
           {errorMessage}
         </p>
       ) : null}

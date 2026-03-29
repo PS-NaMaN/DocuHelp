@@ -5,9 +5,13 @@ import { logFunctionError } from '../utils/logger'
 const OCR_SCALE_STORAGE_KEY = 'docuhelp:ocr-scale'
 const GENERATION_SETTINGS_STORAGE_KEY = 'docuhelp:generation-settings'
 const SELECTED_MODEL_STORAGE_KEY = 'docuhelp:selected-model-id'
+const THEME_STORAGE_KEY = 'docuhelp:theme-name'
+const CUSTOM_THEME_STORAGE_KEY = 'docuhelp:custom-theme-tokens'
 const DEFAULT_OCR_SCALE = 2
 const MIN_OCR_SCALE = 0.5
 const MAX_OCR_SCALE = 5
+const DEFAULT_THEME_NAME = 'light'
+const SUPPORTED_THEME_NAMES = ['light', 'dark', 'amoled', 'custom']
 const DEFAULT_GENERATION_SETTINGS = {
   temperature: 0.7,
   topP: 0.95,
@@ -16,13 +20,133 @@ const DEFAULT_GENERATION_SETTINGS = {
   frequencyPenalty: 0,
   repetitionPenalty: 1,
 }
+const DEFAULT_CUSTOM_THEME_TOKENS = {
+  appBg: '#0b0b0c',
+  panelBg: '#111214',
+  panelMuted: '#16181b',
+  panelStrong: '#111214',
+  textPrimary: '#f8fafc',
+  textSecondary: '#cbd5e1',
+  textMuted: '#94a3b8',
+  accent: '#22c55e',
+  accentContrast: '#04130a',
+}
+const THEME_PRESETS = {
+  light: {
+    appBg: 'linear-gradient(180deg, #f5f7fb 0%, #eef4f7 100%)',
+    panelBg: 'rgba(250, 252, 255, 0.88)',
+    panelElevated: 'rgba(255, 255, 255, 0.94)',
+    panelMuted: 'rgba(244, 247, 250, 0.94)',
+    panelStrong: '#ffffff',
+    panelBorder: 'rgba(148, 163, 184, 0.22)',
+    panelShadow: '0 24px 80px rgba(15, 23, 42, 0.08)',
+    textPrimary: '#111827',
+    textSecondary: '#475569',
+    textMuted: '#64748b',
+    textInverse: '#f8fafc',
+    accent: '#0f766e',
+    accentSoft: 'rgba(15, 118, 110, 0.12)',
+    accentStrong: '#14b8a6',
+    accentContrast: '#ecfeff',
+    successSoft: 'rgba(22, 163, 74, 0.12)',
+    successText: '#15803d',
+    warningSoft: 'rgba(217, 119, 6, 0.14)',
+    warningText: '#b45309',
+    dangerSoft: 'rgba(225, 29, 72, 0.12)',
+    dangerText: '#be123c',
+    composerBg: 'rgba(255, 255, 255, 0.76)',
+    composerBorder: 'rgba(148, 163, 184, 0.2)',
+    messageUserBg: 'linear-gradient(135deg, #14b8a6, #0f766e)',
+    messageAssistantBg: 'rgba(15, 23, 42, 0.03)',
+    messageAssistantBorder: 'rgba(148, 163, 184, 0.16)',
+    scrollbarTrack: 'rgba(148, 163, 184, 0.12)',
+    scrollbarThumb: 'rgba(15, 118, 110, 0.36)',
+    scrollbarThumbHover: 'rgba(15, 118, 110, 0.56)',
+  },
+  dark: {
+    appBg: 'linear-gradient(180deg, #0f172a 0%, #111827 100%)',
+    panelBg: 'rgba(15, 23, 42, 0.84)',
+    panelElevated: 'rgba(15, 23, 42, 0.94)',
+    panelMuted: 'rgba(30, 41, 59, 0.88)',
+    panelStrong: 'rgba(17, 24, 39, 0.98)',
+    panelBorder: 'rgba(148, 163, 184, 0.16)',
+    panelShadow: '0 24px 80px rgba(2, 6, 23, 0.32)',
+    textPrimary: '#f8fafc',
+    textSecondary: '#cbd5e1',
+    textMuted: '#94a3b8',
+    textInverse: '#e2e8f0',
+    accent: '#2dd4bf',
+    accentSoft: 'rgba(45, 212, 191, 0.16)',
+    accentStrong: '#5eead4',
+    accentContrast: '#0f172a',
+    successSoft: 'rgba(34, 197, 94, 0.14)',
+    successText: '#86efac',
+    warningSoft: 'rgba(245, 158, 11, 0.18)',
+    warningText: '#fcd34d',
+    dangerSoft: 'rgba(251, 113, 133, 0.16)',
+    dangerText: '#fda4af',
+    composerBg: 'rgba(15, 23, 42, 0.88)',
+    composerBorder: 'rgba(148, 163, 184, 0.16)',
+    messageUserBg: 'linear-gradient(135deg, #14b8a6, #0f766e)',
+    messageAssistantBg: 'rgba(255, 255, 255, 0.04)',
+    messageAssistantBorder: 'rgba(148, 163, 184, 0.12)',
+    scrollbarTrack: 'rgba(148, 163, 184, 0.08)',
+    scrollbarThumb: 'rgba(45, 212, 191, 0.28)',
+    scrollbarThumbHover: 'rgba(45, 212, 191, 0.5)',
+  },
+  amoled: {
+    appBg: '#000000',
+    panelBg: '#000000',
+    panelElevated: '#050505',
+    panelMuted: '#0a0a0a',
+    panelStrong: '#000000',
+    panelBorder: 'rgba(255, 255, 255, 0.08)',
+    panelShadow: '0 24px 80px rgba(0, 0, 0, 0.4)',
+    textPrimary: '#fafafa',
+    textSecondary: '#d4d4d8',
+    textMuted: '#a1a1aa',
+    textInverse: '#fafafa',
+    accent: '#38bdf8',
+    accentSoft: 'rgba(56, 189, 248, 0.18)',
+    accentStrong: '#7dd3fc',
+    accentContrast: '#001018',
+    successSoft: 'rgba(34, 197, 94, 0.18)',
+    successText: '#86efac',
+    warningSoft: 'rgba(245, 158, 11, 0.2)',
+    warningText: '#fcd34d',
+    dangerSoft: 'rgba(244, 63, 94, 0.2)',
+    dangerText: '#fda4af',
+    composerBg: '#050505',
+    composerBorder: 'rgba(255, 255, 255, 0.08)',
+    messageUserBg: 'linear-gradient(135deg, #0ea5e9, #0369a1)',
+    messageAssistantBg: '#050505',
+    messageAssistantBorder: 'rgba(255, 255, 255, 0.08)',
+    scrollbarTrack: 'rgba(255, 255, 255, 0.06)',
+    scrollbarThumb: 'rgba(56, 189, 248, 0.34)',
+    scrollbarThumbHover: 'rgba(56, 189, 248, 0.58)',
+  },
+}
 
 /**
- * Manage persisted user settings for OCR and local LLM generation behavior.
+ * Manage persisted user settings for OCR, theme selection, custom theme tokens, and local LLM generation behavior.
  *
  * @returns {{
  *   ocrScale: number,
  *   setOcrScale: (nextOcrScale: number | string) => void,
+ *   themeName: string,
+ *   setThemeName: (nextThemeName: string) => void,
+ *   customThemeTokens: {
+ *     appBg: string,
+ *     panelBg: string,
+ *     panelMuted: string,
+ *     panelStrong: string,
+ *     textPrimary: string,
+ *     textSecondary: string,
+ *     textMuted: string,
+ *     accent: string,
+ *     accentContrast: string,
+ *   },
+ *   updateCustomThemeToken: (tokenName: string, nextValue: string) => void,
  *   selectedModelId: string,
  *   setSelectedModelId: (nextModelId: string) => void,
  *   generationSettings: {
@@ -38,12 +162,23 @@ const DEFAULT_GENERATION_SETTINGS = {
  */
 export function useSettings() {
   const [ocrScale, setOcrScaleState] = useState(readStoredOcrScale)
+  const [themeName, setThemeNameState] = useState(readStoredThemeName)
+  const [customThemeTokens, setCustomThemeTokensState] = useState(readStoredCustomThemeTokens)
   const [selectedModelId, setSelectedModelIdState] = useState(readStoredSelectedModelId)
   const [generationSettings, setGenerationSettingsState] = useState(readStoredGenerationSettings)
 
   useEffect(() => {
     writeStoredOcrScale(ocrScale)
   }, [ocrScale])
+
+  useEffect(() => {
+    writeStoredThemeName(themeName)
+    applyThemeToDocument(themeName, customThemeTokens)
+  }, [themeName, customThemeTokens])
+
+  useEffect(() => {
+    writeStoredCustomThemeTokens(customThemeTokens)
+  }, [customThemeTokens])
 
   useEffect(() => {
     writeStoredSelectedModelId(selectedModelId)
@@ -61,6 +196,34 @@ export function useSettings() {
    */
   function setOcrScale(nextOcrScale) {
     setOcrScaleState(normalizeOcrScale(nextOcrScale))
+  }
+
+  /**
+   * Persist the selected supported theme name.
+   *
+   * @param {string} nextThemeName - Requested theme name.
+   * @returns {void}
+   */
+  function setThemeName(nextThemeName) {
+    setThemeNameState(normalizeThemeName(nextThemeName))
+  }
+
+  /**
+   * Persist one custom theme token value.
+   *
+   * @param {string} tokenName - Custom token key to update.
+   * @param {string} nextValue - Raw color value selected by the user.
+   * @returns {void}
+   */
+  function updateCustomThemeToken(tokenName, nextValue) {
+    if (!(tokenName in DEFAULT_CUSTOM_THEME_TOKENS)) {
+      return
+    }
+
+    setCustomThemeTokensState((previousTokens) => ({
+      ...previousTokens,
+      [tokenName]: normalizeColorToken(nextValue, previousTokens[tokenName]),
+    }))
   }
 
   /**
@@ -94,6 +257,10 @@ export function useSettings() {
   return {
     ocrScale,
     setOcrScale,
+    themeName,
+    setThemeName,
+    customThemeTokens,
+    updateCustomThemeToken,
     selectedModelId,
     setSelectedModelId,
     generationSettings,
@@ -101,11 +268,6 @@ export function useSettings() {
   }
 }
 
-/**
- * Read the stored OCR scale from localStorage, falling back safely when unavailable.
- *
- * @returns {number} Stored OCR scale or the default value.
- */
 function readStoredOcrScale() {
   try {
     if (typeof window === 'undefined') {
@@ -121,16 +283,48 @@ function readStoredOcrScale() {
     return normalizeOcrScale(storedOcrScale)
   } catch (error) {
     logFunctionError('useSettings.readStoredOcrScale', error)
-
     return DEFAULT_OCR_SCALE
   }
 }
 
-/**
- * Read the stored selected model id from localStorage with a safe supported-model fallback.
- *
- * @returns {string} Stored or default supported model id.
- */
+function readStoredThemeName() {
+  try {
+    if (typeof window === 'undefined') {
+      return DEFAULT_THEME_NAME
+    }
+
+    const storedThemeName = window.localStorage.getItem(THEME_STORAGE_KEY)
+
+    if (!storedThemeName) {
+      return DEFAULT_THEME_NAME
+    }
+
+    return normalizeThemeName(storedThemeName)
+  } catch (error) {
+    logFunctionError('useSettings.readStoredThemeName', error)
+    return DEFAULT_THEME_NAME
+  }
+}
+
+function readStoredCustomThemeTokens() {
+  try {
+    if (typeof window === 'undefined') {
+      return DEFAULT_CUSTOM_THEME_TOKENS
+    }
+
+    const storedCustomThemeTokens = window.localStorage.getItem(CUSTOM_THEME_STORAGE_KEY)
+
+    if (!storedCustomThemeTokens) {
+      return DEFAULT_CUSTOM_THEME_TOKENS
+    }
+
+    return normalizeCustomThemeTokens(JSON.parse(storedCustomThemeTokens))
+  } catch (error) {
+    logFunctionError('useSettings.readStoredCustomThemeTokens', error)
+    return DEFAULT_CUSTOM_THEME_TOKENS
+  }
+}
+
 function readStoredSelectedModelId() {
   try {
     if (typeof window === 'undefined') {
@@ -146,23 +340,10 @@ function readStoredSelectedModelId() {
     return normalizeSelectedModelId(storedSelectedModelId)
   } catch (error) {
     logFunctionError('useSettings.readStoredSelectedModelId', error)
-
     return DEFAULT_WEB_LLM_MODEL_ID
   }
 }
 
-/**
- * Read the stored generation settings from localStorage with safe fallbacks per field.
- *
- * @returns {{
- *   temperature: number,
- *   topP: number,
- *   maxTokens: number,
- *   presencePenalty: number,
- *   frequencyPenalty: number,
- *   repetitionPenalty: number,
- * }} Stored or default generation settings.
- */
 function readStoredGenerationSettings() {
   try {
     if (typeof window === 'undefined') {
@@ -175,22 +356,13 @@ function readStoredGenerationSettings() {
       return DEFAULT_GENERATION_SETTINGS
     }
 
-    const parsedGenerationSettings = JSON.parse(storedGenerationSettings)
-
-    return normalizeGenerationSettings(parsedGenerationSettings)
+    return normalizeGenerationSettings(JSON.parse(storedGenerationSettings))
   } catch (error) {
     logFunctionError('useSettings.readStoredGenerationSettings', error)
-
     return DEFAULT_GENERATION_SETTINGS
   }
 }
 
-/**
- * Persist the OCR scale to localStorage for future page loads.
- *
- * @param {number} ocrScale - Current OCR scale preference.
- * @returns {void}
- */
 function writeStoredOcrScale(ocrScale) {
   try {
     if (typeof window === 'undefined') {
@@ -199,18 +371,34 @@ function writeStoredOcrScale(ocrScale) {
 
     window.localStorage.setItem(OCR_SCALE_STORAGE_KEY, ocrScale.toFixed(2))
   } catch (error) {
-    logFunctionError('useSettings.writeStoredOcrScale', error, {
-      ocrScale,
-    })
+    logFunctionError('useSettings.writeStoredOcrScale', error, { ocrScale })
   }
 }
 
-/**
- * Persist the selected model id to localStorage for future page loads.
- *
- * @param {string} selectedModelId - Current selected model id preference.
- * @returns {void}
- */
+function writeStoredThemeName(themeName) {
+  try {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(THEME_STORAGE_KEY, themeName)
+  } catch (error) {
+    logFunctionError('useSettings.writeStoredThemeName', error, { themeName })
+  }
+}
+
+function writeStoredCustomThemeTokens(customThemeTokens) {
+  try {
+    if (typeof window === 'undefined') {
+      return
+    }
+
+    window.localStorage.setItem(CUSTOM_THEME_STORAGE_KEY, JSON.stringify(customThemeTokens))
+  } catch (error) {
+    logFunctionError('useSettings.writeStoredCustomThemeTokens', error, { customThemeTokens })
+  }
+}
+
 function writeStoredSelectedModelId(selectedModelId) {
   try {
     if (typeof window === 'undefined') {
@@ -219,18 +407,10 @@ function writeStoredSelectedModelId(selectedModelId) {
 
     window.localStorage.setItem(SELECTED_MODEL_STORAGE_KEY, selectedModelId)
   } catch (error) {
-    logFunctionError('useSettings.writeStoredSelectedModelId', error, {
-      selectedModelId,
-    })
+    logFunctionError('useSettings.writeStoredSelectedModelId', error, { selectedModelId })
   }
 }
 
-/**
- * Persist generation settings to localStorage for future page loads.
- *
- * @param {Record<string, number>} generationSettings - Current generation settings object.
- * @returns {void}
- */
 function writeStoredGenerationSettings(generationSettings) {
   try {
     if (typeof window === 'undefined') {
@@ -242,18 +422,45 @@ function writeStoredGenerationSettings(generationSettings) {
       JSON.stringify(generationSettings),
     )
   } catch (error) {
-    logFunctionError('useSettings.writeStoredGenerationSettings', error, {
-      generationSettings,
-    })
+    logFunctionError('useSettings.writeStoredGenerationSettings', error, { generationSettings })
   }
 }
 
 /**
- * Clamp OCR scale input to the supported range and coerce invalid values safely.
+ * Apply the active theme preset and optional custom overrides to the root document.
  *
- * @param {number | string} rawOcrScale - Untrusted OCR scale input.
- * @returns {number} Normalized OCR scale inside the supported bounds.
+ * @param {string} themeName - Theme name to apply.
+ * @param {{
+ *   appBg: string,
+ *   panelBg: string,
+ *   panelMuted: string,
+ *   panelStrong: string,
+ *   textPrimary: string,
+ *   textSecondary: string,
+ *   textMuted: string,
+ *   accent: string,
+ *   accentContrast: string,
+ * }} customThemeTokens - Custom token values supplied by the user.
+ * @returns {void}
  */
+function applyThemeToDocument(themeName, customThemeTokens) {
+  if (typeof document === 'undefined') {
+    return
+  }
+
+  const documentElement = document.documentElement
+  documentElement.dataset.theme = themeName
+
+  const themeTokens =
+    themeName === 'custom'
+      ? createCustomThemePreset(customThemeTokens)
+      : THEME_PRESETS[themeName] ?? THEME_PRESETS[DEFAULT_THEME_NAME]
+
+  Object.entries(themeTokens).forEach(([tokenName, tokenValue]) => {
+    documentElement.style.setProperty(toCssVariableName(tokenName), tokenValue)
+  })
+}
+
 function normalizeOcrScale(rawOcrScale) {
   const parsedOcrScale = Number(rawOcrScale)
 
@@ -264,12 +471,14 @@ function normalizeOcrScale(rawOcrScale) {
   return Math.max(MIN_OCR_SCALE, Math.min(MAX_OCR_SCALE, parsedOcrScale))
 }
 
-/**
- * Normalize a requested model id against the supported curated list.
- *
- * @param {string} rawModelId - Untrusted model id.
- * @returns {string} Supported model id.
- */
+function normalizeThemeName(rawThemeName) {
+  if (SUPPORTED_THEME_NAMES.includes(rawThemeName)) {
+    return rawThemeName
+  }
+
+  return DEFAULT_THEME_NAME
+}
+
 function normalizeSelectedModelId(rawModelId) {
   const supportedModelIds = getSupportedModelIds()
 
@@ -280,19 +489,20 @@ function normalizeSelectedModelId(rawModelId) {
   return DEFAULT_WEB_LLM_MODEL_ID
 }
 
-/**
- * Normalize every supported generation setting key using the correct bounds.
- *
- * @param {Record<string, unknown>} rawGenerationSettings - Untrusted parsed settings object.
- * @returns {{
- *   temperature: number,
- *   topP: number,
- *   maxTokens: number,
- *   presencePenalty: number,
- *   frequencyPenalty: number,
- *   repetitionPenalty: number,
- * }} Fully normalized generation settings.
- */
+function normalizeCustomThemeTokens(rawCustomThemeTokens) {
+  return {
+    appBg: normalizeColorToken(rawCustomThemeTokens.appBg, DEFAULT_CUSTOM_THEME_TOKENS.appBg),
+    panelBg: normalizeColorToken(rawCustomThemeTokens.panelBg, DEFAULT_CUSTOM_THEME_TOKENS.panelBg),
+    panelMuted: normalizeColorToken(rawCustomThemeTokens.panelMuted, DEFAULT_CUSTOM_THEME_TOKENS.panelMuted),
+    panelStrong: normalizeColorToken(rawCustomThemeTokens.panelStrong, DEFAULT_CUSTOM_THEME_TOKENS.panelStrong),
+    textPrimary: normalizeColorToken(rawCustomThemeTokens.textPrimary, DEFAULT_CUSTOM_THEME_TOKENS.textPrimary),
+    textSecondary: normalizeColorToken(rawCustomThemeTokens.textSecondary, DEFAULT_CUSTOM_THEME_TOKENS.textSecondary),
+    textMuted: normalizeColorToken(rawCustomThemeTokens.textMuted, DEFAULT_CUSTOM_THEME_TOKENS.textMuted),
+    accent: normalizeColorToken(rawCustomThemeTokens.accent, DEFAULT_CUSTOM_THEME_TOKENS.accent),
+    accentContrast: normalizeColorToken(rawCustomThemeTokens.accentContrast, DEFAULT_CUSTOM_THEME_TOKENS.accentContrast),
+  }
+}
+
 function normalizeGenerationSettings(rawGenerationSettings) {
   return {
     temperature: normalizeGenerationSettingValue('temperature', rawGenerationSettings.temperature),
@@ -313,13 +523,6 @@ function normalizeGenerationSettings(rawGenerationSettings) {
   }
 }
 
-/**
- * Clamp one generation setting to the range supported by the UI and request layer.
- *
- * @param {string} settingName - Generation setting key to normalize.
- * @param {number | string | undefined} rawValue - Untrusted setting value.
- * @returns {number} Normalized numeric generation setting.
- */
 function normalizeGenerationSettingValue(settingName, rawValue) {
   const parsedValue = Number(rawValue)
 
@@ -351,13 +554,86 @@ function normalizeGenerationSettingValue(settingName, rawValue) {
 }
 
 /**
- * Clamp a numeric value between the provided minimum and maximum bounds.
+ * Create the full token preset for the custom theme from a small user-editable token set.
  *
- * @param {number} value - Numeric value to clamp.
- * @param {number} minimumValue - Inclusive lower bound.
- * @param {number} maximumValue - Inclusive upper bound.
- * @returns {number} Clamped numeric value.
+ * @param {{
+ *   appBg: string,
+ *   panelBg: string,
+ *   panelMuted: string,
+ *   panelStrong: string,
+ *   textPrimary: string,
+ *   textSecondary: string,
+ *   textMuted: string,
+ *   accent: string,
+ *   accentContrast: string,
+ * }} customThemeTokens - User-editable base theme tokens.
+ * @returns {Record<string, string>} Full theme token preset for the custom theme.
  */
+function createCustomThemePreset(customThemeTokens) {
+  return {
+    appBg: customThemeTokens.appBg,
+    panelBg: customThemeTokens.panelBg,
+    panelElevated: customThemeTokens.panelStrong,
+    panelMuted: customThemeTokens.panelMuted,
+    panelStrong: customThemeTokens.panelStrong,
+    panelBorder: 'rgba(148, 163, 184, 0.18)',
+    panelShadow: '0 24px 80px rgba(0, 0, 0, 0.22)',
+    textPrimary: customThemeTokens.textPrimary,
+    textSecondary: customThemeTokens.textSecondary,
+    textMuted: customThemeTokens.textMuted,
+    textInverse: customThemeTokens.textPrimary,
+    accent: customThemeTokens.accent,
+    accentSoft: colorWithAlpha(customThemeTokens.accent, 0.14),
+    accentStrong: customThemeTokens.accent,
+    accentContrast: customThemeTokens.accentContrast,
+    successSoft: 'rgba(34, 197, 94, 0.14)',
+    successText: '#86efac',
+    warningSoft: 'rgba(245, 158, 11, 0.18)',
+    warningText: '#fcd34d',
+    dangerSoft: 'rgba(244, 63, 94, 0.16)',
+    dangerText: '#fda4af',
+    composerBg: customThemeTokens.panelStrong,
+    composerBorder: 'rgba(148, 163, 184, 0.18)',
+    messageUserBg: `linear-gradient(135deg, ${customThemeTokens.accent}, ${customThemeTokens.accent})`,
+    messageAssistantBg: customThemeTokens.panelMuted,
+    messageAssistantBorder: 'rgba(148, 163, 184, 0.16)',
+    scrollbarTrack: 'rgba(148, 163, 184, 0.08)',
+    scrollbarThumb: colorWithAlpha(customThemeTokens.accent, 0.4),
+    scrollbarThumbHover: colorWithAlpha(customThemeTokens.accent, 0.62),
+  }
+}
+
+function normalizeColorToken(rawValue, fallbackValue) {
+  if (typeof rawValue !== 'string') {
+    return fallbackValue
+  }
+
+  const trimmedValue = rawValue.trim()
+
+  if (/^#[0-9a-fA-F]{6}$/.test(trimmedValue)) {
+    return trimmedValue
+  }
+
+  if (/^#[0-9a-fA-F]{3}$/.test(trimmedValue)) {
+    return `#${trimmedValue[1]}${trimmedValue[1]}${trimmedValue[2]}${trimmedValue[2]}${trimmedValue[3]}${trimmedValue[3]}`
+  }
+
+  return fallbackValue
+}
+
+function colorWithAlpha(hexColor, alphaValue) {
+  const normalizedHexColor = normalizeColorToken(hexColor, '#22c55e')
+  const redChannel = Number.parseInt(normalizedHexColor.slice(1, 3), 16)
+  const greenChannel = Number.parseInt(normalizedHexColor.slice(3, 5), 16)
+  const blueChannel = Number.parseInt(normalizedHexColor.slice(5, 7), 16)
+
+  return `rgba(${redChannel}, ${greenChannel}, ${blueChannel}, ${alphaValue})`
+}
+
+function toCssVariableName(tokenName) {
+  return `--${tokenName.replace(/[A-Z]/g, (matchedCharacter) => `-${matchedCharacter.toLowerCase()}`)}`
+}
+
 function clampNumber(value, minimumValue, maximumValue) {
   return Math.max(minimumValue, Math.min(maximumValue, value))
 }

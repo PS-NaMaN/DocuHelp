@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import Sidebar from './components/Sidebar'
 import ChatInterface from './components/ChatInterface'
-import ModelLoader from './components/ModelLoader'
 import SettingsModal from './components/SettingsModal'
 import { useLocalLLM } from './hooks/useLocalLLM'
 import { useRagQuery } from './hooks/useRagQuery'
@@ -49,6 +48,10 @@ function App() {
   const {
     ocrScale,
     setOcrScale,
+    themeName,
+    setThemeName,
+    customThemeTokens,
+    updateCustomThemeToken,
     selectedModelId,
     setSelectedModelId,
     generationSettings,
@@ -105,7 +108,10 @@ function App() {
     setAvailableFileNames(librarySnapshot.uniqueFileNames)
     setStorageSummary(librarySnapshot.summary)
     setActiveFileNames((previousActiveFileNames) =>
-      syncActiveFileNamesWithAvailableFiles(previousActiveFileNames, librarySnapshot.uniqueFileNames),
+      syncActiveFileNamesWithAvailableFiles(
+        previousActiveFileNames,
+        librarySnapshot.uniqueFileNames,
+      ),
     )
   }
 
@@ -270,35 +276,45 @@ function App() {
   const progressPercentage = calculateProgressPercentage(ingestionProgress)
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-[radial-gradient(circle_at_top_left,_rgba(14,165,233,0.14),_transparent_24%),radial-gradient(circle_at_bottom_right,_rgba(249,115,22,0.16),_transparent_22%),linear-gradient(135deg,_#f6f3ee_0%,_#fffdf9_36%,_#fff9f0_100%)] text-stone-900">
+    <div
+      className="flex h-screen w-full overflow-hidden"
+      data-theme={themeName}
+      style={{
+        background: 'var(--app-bg)',
+        color: 'var(--text-primary)',
+      }}
+    >
       <Sidebar
-            storedDocuments={storedDocuments}
-            storageSummary={storageSummary}
-            ingestionProgress={ingestionProgress}
-            progressPercentage={progressPercentage}
-            errorMessage={errorMessage}
-            isIngestingDocuments={isIngestingDocuments}
-            deletingDocumentFileName={deletingDocumentFileName}
-            onFileUpload={handleFileUpload}
-            onDeleteDocument={handleDeleteDocument}
-            onOpenSettings={openSettingsModal}
-          />
-          <MainWorkspace
-            isLocalLlmSupported={isLocalLlmSupported}
-            isLocalLlmLoading={isLocalLlmLoading}
-            localLlmProgressText={localLlmProgressText}
-            localLlmProgressValue={localLlmProgressValue}
-            isLocalLlmReady={isLocalLlmReady}
-            localLlmErrorMessage={localLlmErrorMessage}
-            onInitializeModel={initializeModel}
-            messages={messages}
-            isGenerating={isGenerating}
-            currentStreamingReply={currentStreamingReply}
-            availableFileNames={availableFileNames}
-            activeFileNames={activeFileNames}
-            toggleFileSelection={toggleFileSelection}
-            onAskQuestion={askQuestion}
-          />
+        storedDocuments={storedDocuments}
+        storageSummary={storageSummary}
+        ingestionProgress={ingestionProgress}
+        progressPercentage={progressPercentage}
+        errorMessage={errorMessage}
+        isIngestingDocuments={isIngestingDocuments}
+        deletingDocumentFileName={deletingDocumentFileName}
+        isLocalLlmSupported={isLocalLlmSupported}
+        isLocalLlmLoading={isLocalLlmLoading}
+        localLlmProgressText={localLlmProgressText}
+        localLlmProgressValue={localLlmProgressValue}
+        isLocalLlmReady={isLocalLlmReady}
+        localLlmErrorMessage={localLlmErrorMessage}
+        onFileUpload={handleFileUpload}
+        onDeleteDocument={handleDeleteDocument}
+        onOpenSettings={openSettingsModal}
+      />
+
+      <MainWorkspace
+        messages={messages}
+        isGenerating={isGenerating}
+        currentStreamingReply={currentStreamingReply}
+        isLocalLlmReady={isLocalLlmReady}
+        isLocalLlmLoading={isLocalLlmLoading}
+        availableFileNames={availableFileNames}
+        activeFileNames={activeFileNames}
+        toggleFileSelection={toggleFileSelection}
+        onInitializeModel={initializeModel}
+        onAskQuestion={askQuestion}
+      />
 
       {isSettingsModalOpen ? (
         <SettingsModal
@@ -308,11 +324,15 @@ function App() {
           currentModelId={getActiveModelId() ?? selectedModelId ?? DEFAULT_WEB_LLM_MODEL_ID}
           availableModels={getSupportedModelOptions()}
           ocrScale={ocrScale}
+          themeName={themeName}
+          customThemeTokens={customThemeTokens}
           generationSettings={generationSettings}
           onClose={closeSettingsModal}
           onDeleteLlmCache={handleDeleteLlmCache}
           onDeleteIndexedData={handleDeleteIndexedData}
           onChangeOcrScale={setOcrScale}
+          onChangeTheme={setThemeName}
+          onChangeCustomThemeToken={updateCustomThemeToken}
           onChangeGenerationSetting={updateGenerationSetting}
           onChangeModel={handleChangeModel}
         />
@@ -473,19 +493,10 @@ function syncActiveFileNamesWithAvailableFiles(previousActiveFileNames, availabl
   return previousActiveFileNames.filter((activeFileName) => availableFileNames.includes(activeFileName))
 }
 
-
-
 /**
- * Render the main workspace including chat and model loader panels.
+ * Render the main chat workspace without the old right-hand model panel.
  *
  * @param {{
- *   isLocalLlmSupported: boolean | null,
- *   isLocalLlmLoading: boolean,
- *   localLlmProgressText: string,
- *   localLlmProgressValue: number,
- *   isLocalLlmReady: boolean,
- *   localLlmErrorMessage: string,
- *   onInitializeModel: () => Promise<unknown>,
  *   messages: Array<{
  *     id: string,
  *     role: 'user' | 'assistant',
@@ -494,110 +505,43 @@ function syncActiveFileNamesWithAvailableFiles(previousActiveFileNames, availabl
  *   }>,
  *   isGenerating: boolean,
  *   currentStreamingReply: string,
+ *   isLocalLlmReady: boolean,
+ *   isLocalLlmLoading: boolean,
  *   availableFileNames: string[],
  *   activeFileNames: string[],
  *   toggleFileSelection: (fileName: string) => void,
+ *   onInitializeModel: () => Promise<unknown>,
  *   onAskQuestion: (userQuery: string) => Promise<void>,
- * }} props - Model loader state and query state for the main workspace.
+ * }} props - Main chat workspace state and actions.
  * @returns {JSX.Element} The main content panel.
  */
 function MainWorkspace({
-  isLocalLlmSupported,
-  isLocalLlmLoading,
-  localLlmProgressText,
-  localLlmProgressValue,
-  isLocalLlmReady,
-  localLlmErrorMessage,
-  onInitializeModel,
   messages,
   isGenerating,
   currentStreamingReply,
+  isLocalLlmReady,
+  isLocalLlmLoading,
   availableFileNames,
   activeFileNames,
   toggleFileSelection,
+  onInitializeModel,
   onAskQuestion,
 }) {
-  const showInitializeButton =
-    isLocalLlmSupported === true && !isLocalLlmLoading && !isLocalLlmReady
-
   return (
-    <main className="flex-1 flex flex-col h-full relative bg-stone-950 text-stone-100 shadow-[0_24px_80px_rgba(28,25,23,0.12)]">
-      <div className="flex-shrink-0 border-b border-white/10 px-6 py-6">
-        <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-300">
-          Retrieval Workspace
-        </p>
-        <h2 className="mt-3 max-w-2xl font-serif text-3xl leading-tight text-white">
-          Chat with your local document index, stream grounded answers, and inspect the cited sources.
-        </h2>
-      </div>
-
-      <div className="flex-1 flex flex-col overflow-hidden lg:flex-row">
-        <div className="flex-1 flex flex-col min-w-0">
-          <ChatInterface
-          messages={messages}
-          currentStreamingReply={currentStreamingReply}
-          isGenerating={isGenerating}
-          isModelReady={isLocalLlmReady}
-          availableFileNames={availableFileNames}
-          activeFileNames={activeFileNames}
-          toggleFileSelection={toggleFileSelection}
-            onAskQuestion={onAskQuestion}
-          />
-        </div>
-
-        <section className="w-full lg:w-80 flex-shrink-0 overflow-y-auto border-l border-white/10 bg-[linear-gradient(180deg,_rgba(8,145,178,0.08),_rgba(255,255,255,0.03))] p-5">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm font-semibold text-white">Model loading</p>
-            {showInitializeButton ? (
-              <button
-                type="button"
-                className="rounded-full bg-cyan-400 px-4 py-2 text-sm font-semibold text-stone-950 transition hover:bg-cyan-300"
-                onClick={() => {
-                  void onInitializeModel()
-                }}
-              >
-                Initialize Local Model
-              </button>
-            ) : null}
-          </div>
-
-          <ModelLoader
-            isSupported={isLocalLlmSupported}
-            isLoading={isLocalLlmLoading}
-            progressText={localLlmProgressText}
-            progressValue={localLlmProgressValue}
-            isReady={isLocalLlmReady}
-            errorMessage={localLlmErrorMessage}
-          />
-
-          <div className="space-y-3 text-sm leading-6 text-stone-300">
-            <InfoPill label="Parsing" value="pdf.js + markdown token walker + plain text reader" />
-            <InfoPill label="Chunking" value="~400 token windows with 50 token overlap" />
-            <InfoPill label="Embeddings" value="transformers.js MiniLM vectors in browser cache" />
-            <InfoPill label="Local LLM" value="WebLLM engine cached and compiled with WebGPU" />
-            <InfoPill label="Retrieval" value="Cosine similarity over Float32Array chunk embeddings" />
-            <InfoPill label="Storage" value="IndexedDB survives refresh with chunk metadata" />
-          </div>
-        </section>
-      </div>
+    <main className="relative flex h-full flex-1 flex-col">
+      <ChatInterface
+        messages={messages}
+        currentStreamingReply={currentStreamingReply}
+        isGenerating={isGenerating}
+        isModelReady={isLocalLlmReady}
+        isModelLoading={isLocalLlmLoading}
+        availableFileNames={availableFileNames}
+        activeFileNames={activeFileNames}
+        toggleFileSelection={toggleFileSelection}
+        onInitializeModel={onInitializeModel}
+        onAskQuestion={onAskQuestion}
+      />
     </main>
-  )
-}
-
-
-
-/**
- * Render a labeled pipeline note card in the main workspace.
- *
- * @param {{ label: string, value: string }} props - Note label and value text.
- * @returns {JSX.Element} A pipeline note card.
- */
-function InfoPill({ label, value }) {
-  return (
-    <div className="rounded-[1.2rem] border border-white/10 bg-black/10 px-4 py-3">
-      <p className="text-xs uppercase tracking-[0.18em] text-cyan-300">{label}</p>
-      <p className="mt-2 text-sm text-stone-200">{value}</p>
-    </div>
   )
 }
 

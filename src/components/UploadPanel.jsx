@@ -12,15 +12,34 @@ const ACCEPTED_FILE_TYPES =
  */
 function UploadPanel({ isIngestingDocuments, onFileUpload }) {
   return (
-    <section className="rounded-[1.5rem] border border-dashed border-cyan-300 bg-cyan-50/80 p-5">
-      <p className="text-sm font-semibold text-cyan-900">Upload documents</p>
-      <p className="mt-2 text-sm leading-6 text-cyan-800/80">
+    <section
+      className="rounded-[1.5rem] border p-5"
+      style={{
+        borderColor: 'var(--panel-border)',
+        background: 'var(--panel-elevated)',
+      }}
+    >
+      <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+        Upload documents
+      </p>
+      <p className="mt-2 text-sm leading-6" style={{ color: 'var(--text-secondary)' }}>
         Accepts PDF, Markdown, and plain text. Embeddings are generated in the browser with
         `all-MiniLM-L6-v2`.
       </p>
-      <label className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[1.2rem] border border-cyan-200 bg-white px-4 py-6 text-center transition hover:border-cyan-400 hover:bg-cyan-50">
-        <span className="text-sm font-medium text-stone-800">Choose one or more files</span>
-        <span className="mt-2 text-xs uppercase tracking-[0.24em] text-stone-500">
+      <label
+        className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[1.2rem] border px-4 py-6 text-center transition"
+        style={{
+          borderColor: 'var(--panel-border)',
+          background: 'var(--panel-muted)',
+        }}
+      >
+        <span className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+          Choose one or more files
+        </span>
+        <span
+          className="mt-2 text-xs uppercase tracking-[0.24em]"
+          style={{ color: 'var(--text-muted)' }}
+        >
           PDF / MD / TXT
         </span>
         <input

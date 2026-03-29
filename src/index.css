@@ -2,13 +2,76 @@
 @plugin "@tailwindcss/typography";
 
 :root {
-  color: #1c1917;
-  background: #fffdf9;
+  color: #1f2937;
+  background: #f5f7fb;
   font-family: Georgia, "Times New Roman", serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  --app-bg: linear-gradient(180deg, #f5f7fb 0%, #eef4f7 100%);
+  --panel-bg: rgba(250, 252, 255, 0.88);
+  --panel-elevated: rgba(255, 255, 255, 0.94);
+  --panel-muted: rgba(244, 247, 250, 0.94);
+  --panel-strong: #ffffff;
+  --panel-border: rgba(148, 163, 184, 0.22);
+  --panel-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
+  --text-primary: #111827;
+  --text-secondary: #475569;
+  --text-muted: #64748b;
+  --text-inverse: #f8fafc;
+  --accent: #0f766e;
+  --accent-soft: rgba(15, 118, 110, 0.12);
+  --accent-strong: #14b8a6;
+  --accent-contrast: #ecfeff;
+  --success-soft: rgba(22, 163, 74, 0.12);
+  --success-text: #15803d;
+  --warning-soft: rgba(217, 119, 6, 0.14);
+  --warning-text: #b45309;
+  --danger-soft: rgba(225, 29, 72, 0.12);
+  --danger-text: #be123c;
+  --composer-bg: rgba(255, 255, 255, 0.76);
+  --composer-border: rgba(148, 163, 184, 0.2);
+  --message-user-bg: linear-gradient(135deg, #14b8a6, #0f766e);
+  --message-assistant-bg: rgba(255, 255, 255, 0.08);
+  --message-assistant-border: rgba(255, 255, 255, 0.08);
+  --scrollbar-track: rgba(148, 163, 184, 0.12);
+  --scrollbar-thumb: rgba(15, 118, 110, 0.36);
+  --scrollbar-thumb-hover: rgba(15, 118, 110, 0.56);
+}
+
+:root[data-theme="dark"] {
+  color: #e2e8f0;
+  background: #0f172a;
+  --app-bg: linear-gradient(180deg, #0f172a 0%, #111827 100%);
+  --panel-bg: rgba(15, 23, 42, 0.84);
+  --panel-elevated: rgba(15, 23, 42, 0.94);
+  --panel-muted: rgba(30, 41, 59, 0.88);
+  --panel-strong: rgba(17, 24, 39, 0.98);
+  --panel-border: rgba(148, 163, 184, 0.16);
+  --panel-shadow: 0 24px 80px rgba(2, 6, 23, 0.32);
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
+  --text-inverse: #e2e8f0;
+  --accent: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.16);
+  --accent-strong: #5eead4;
+  --accent-contrast: #0f172a;
+  --success-soft: rgba(34, 197, 94, 0.14);
+  --success-text: #86efac;
+  --warning-soft: rgba(245, 158, 11, 0.18);
+  --warning-text: #fcd34d;
+  --danger-soft: rgba(251, 113, 133, 0.16);
+  --danger-text: #fda4af;
+  --composer-bg: rgba(15, 23, 42, 0.88);
+  --composer-border: rgba(148, 163, 184, 0.16);
+  --message-user-bg: linear-gradient(135deg, #14b8a6, #0f766e);
+  --message-assistant-bg: rgba(255, 255, 255, 0.04);
+  --message-assistant-border: rgba(148, 163, 184, 0.12);
+  --scrollbar-track: rgba(148, 163, 184, 0.08);
+  --scrollbar-thumb: rgba(45, 212, 191, 0.28);
+  --scrollbar-thumb-hover: rgba(45, 212, 191, 0.5);
 }
 
 html {
@@ -18,6 +81,9 @@ html {
 body {
   margin: 0;
   min-width: 320px;
+  background: var(--app-bg);
+  color: var(--text-primary);
+  transition: background-color 200ms ease, color 200ms ease;
 }
 
 body,
@@ -38,6 +104,62 @@ h3,
   box-sizing: border-box;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
 #root {
   min-height: 100vh;
+}
+
+.docuhelp-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+.docuhelp-scrollbar::-webkit-scrollbar {
+  width: 11px;
+  height: 11px;
+}
+
+.docuhelp-scrollbar::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+.docuhelp-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: padding-box;
+}
+
+.docuhelp-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }

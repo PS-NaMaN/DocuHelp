@@ -16,10 +16,20 @@
  */
 function LibraryModal({ storedDocuments, deletingFileName, onDeleteDocument }) {
   return (
-    <section className="rounded-[1.5rem] border border-stone-200 bg-white p-5">
+    <section
+      className="rounded-[1.5rem] border p-5"
+      style={{
+        borderColor: 'var(--panel-border)',
+        background: 'var(--panel-elevated)',
+      }}
+    >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold text-stone-900">Library</p>
-        <p className="text-xs uppercase tracking-[0.22em] text-stone-400">IndexedDB</p>
+        <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Library
+        </p>
+        <p className="text-xs uppercase tracking-[0.22em]" style={{ color: 'var(--text-muted)' }}>
+          IndexedDB
+        </p>
       </div>
 
       <div className="mt-4 space-y-3">
@@ -58,18 +68,30 @@ function LibraryModal({ storedDocuments, deletingFileName, onDeleteDocument }) {
  */
 function LibraryDocumentCard({ storedDocument, isDeleting, onDeleteDocument }) {
   return (
-    <article className="rounded-[1.2rem] border border-stone-200 bg-stone-50 p-3">
+    <article
+      className="rounded-[1.2rem] border p-3"
+      style={{
+        borderColor: 'var(--panel-border)',
+        background: 'var(--panel-muted)',
+      }}
+    >
       <div className="flex flex-col gap-2">
         <div className="flex items-start justify-between gap-2">
-          <p 
-            className="flex-1 text-[13px] font-medium leading-5 text-stone-900 break-words line-clamp-2" 
+          <p
+            className="line-clamp-2 flex-1 break-words text-[13px] font-medium leading-5"
+            style={{ color: 'var(--text-primary)' }}
             title={storedDocument.name}
           >
             {storedDocument.name}
           </p>
           <button
             type="button"
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-600 transition hover:border-rose-300 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              borderColor: 'var(--danger-soft)',
+              background: 'var(--panel-strong)',
+              color: 'var(--danger-text)',
+            }}
             onClick={() => {
               void onDeleteDocument(storedDocument.name)
             }}
@@ -77,15 +99,25 @@ function LibraryDocumentCard({ storedDocument, isDeleting, onDeleteDocument }) {
             aria-label={`Delete ${storedDocument.name}`}
             title={`Delete ${storedDocument.name}`}
           >
-            {isDeleting ? '...' : '×'}
+            {isDeleting ? '...' : 'x'}
           </button>
         </div>
 
-        <div className="flex items-center justify-between mt-1">
-          <p className="text-[11px] font-bold uppercase tracking-wider text-stone-500 truncate pr-2">
-            {storedDocument.extension} • {storedDocument.chunkCount} chunks
+        <div className="mt-1 flex items-center justify-between">
+          <p
+            className="truncate pr-2 text-[11px] font-bold uppercase tracking-wider"
+            style={{ color: 'var(--text-muted)' }}
+          >
+            {storedDocument.extension} | {storedDocument.chunkCount} chunks
           </p>
-          <span className="flex-shrink-0 rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[10px] font-bold text-stone-500 shadow-sm">
+          <span
+            className="flex-shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-bold shadow-sm"
+            style={{
+              borderColor: 'var(--panel-border)',
+              background: 'var(--panel-strong)',
+              color: 'var(--text-muted)',
+            }}
+          >
             {storedDocument.embeddingDimensions}d
           </span>
         </div>
@@ -101,7 +133,14 @@ function LibraryDocumentCard({ storedDocument, isDeleting, onDeleteDocument }) {
  */
 function EmptyLibraryState() {
   return (
-    <div className="rounded-[1.2rem] border border-dashed border-stone-200 px-4 py-5 text-sm leading-6 text-stone-500">
+    <div
+      className="rounded-[1.2rem] border px-4 py-5 text-sm leading-6"
+      style={{
+        borderColor: 'var(--panel-border)',
+        background: 'var(--panel-muted)',
+        color: 'var(--text-secondary)',
+      }}
+    >
       No local documents yet. Upload a file to run extraction, chunking, embedding, and
       persistence entirely in the browser.
     </div>
