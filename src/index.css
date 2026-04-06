@@ -24,6 +24,7 @@
   --accent-soft: rgba(15, 118, 110, 0.12);
   --accent-strong: #14b8a6;
   --accent-contrast: #ecfeff;
+  --message-user-text: #f8fafc;
   --success-soft: rgba(22, 163, 74, 0.12);
   --success-text: #15803d;
   --warning-soft: rgba(217, 119, 6, 0.14);
@@ -130,6 +131,44 @@ h3,
   background: var(--scrollbar-thumb-hover);
   border: 2px solid transparent;
   background-clip: padding-box;
+}
+
+.docuhelp-prose {
+  --tw-prose-body: var(--text-primary);
+  --tw-prose-headings: var(--text-primary);
+  --tw-prose-lead: var(--text-secondary);
+  --tw-prose-links: var(--accent);
+  --tw-prose-bold: var(--text-primary);
+  --tw-prose-counters: var(--text-muted);
+  --tw-prose-bullets: var(--accent);
+  --tw-prose-hr: var(--panel-border);
+  --tw-prose-quotes: var(--text-primary);
+  --tw-prose-quote-borders: var(--panel-border);
+  --tw-prose-captions: var(--text-muted);
+  --tw-prose-code: var(--text-primary);
+  --tw-prose-pre-code: var(--text-primary);
+  --tw-prose-pre-bg: var(--panel-muted);
+  --tw-prose-th-borders: var(--panel-border);
+  --tw-prose-td-borders: var(--panel-border);
+}
+
+.docuhelp-prose-inverse {
+  --tw-prose-body: var(--message-user-text);
+  --tw-prose-headings: var(--message-user-text);
+  --tw-prose-lead: var(--message-user-text);
+  --tw-prose-links: var(--message-user-text);
+  --tw-prose-bold: var(--message-user-text);
+  --tw-prose-counters: color-mix(in srgb, var(--message-user-text) 78%, transparent);
+  --tw-prose-bullets: var(--message-user-text);
+  --tw-prose-hr: color-mix(in srgb, var(--message-user-text) 18%, transparent);
+  --tw-prose-quotes: var(--message-user-text);
+  --tw-prose-quote-borders: color-mix(in srgb, var(--message-user-text) 18%, transparent);
+  --tw-prose-captions: color-mix(in srgb, var(--message-user-text) 74%, transparent);
+  --tw-prose-code: var(--message-user-text);
+  --tw-prose-pre-code: var(--message-user-text);
+  --tw-prose-pre-bg: color-mix(in srgb, var(--message-user-text) 10%, transparent);
+  --tw-prose-th-borders: color-mix(in srgb, var(--message-user-text) 18%, transparent);
+  --tw-prose-td-borders: color-mix(in srgb, var(--message-user-text) 18%, transparent);
 }
 
 #root {

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { X } from 'lucide-react'
 import LibraryModal from './LibraryModal'
 import StatusPanel from './StatusPanel'
 import UploadPanel from './UploadPanel'
@@ -8,9 +9,12 @@ import UploadPanel from './UploadPanel'
  *
  * @returns {JSX.Element} The sidebar hero section.
  */
-function SidebarHero() {
+function SidebarHero({ showCloseButton = false, onCloseMobile }) {
   return (
-    <div className="border-b px-6 py-6" style={{ borderColor: 'var(--panel-border)' }}>
+    <div
+      className="flex items-center justify-between border-b px-6 py-6"
+      style={{ borderColor: 'var(--panel-border)' }}
+    >
       <h1
         className="cursor-pointer font-serif text-3xl leading-tight"
         style={{ color: 'var(--text-primary)' }}
@@ -18,6 +22,21 @@ function SidebarHero() {
       >
         DocuHelp
       </h1>
+      {showCloseButton ? (
+        <button
+          type="button"
+          className="flex h-10 w-10 items-center justify-center rounded-full border transition lg:hidden"
+          style={{
+            borderColor: 'var(--panel-border)',
+            background: 'var(--panel-muted)',
+            color: 'var(--text-secondary)',
+          }}
+          onClick={onCloseMobile}
+          aria-label="Close menu"
+        >
+          <X size={18} />
+        </button>
+      ) : null}
     </div>
   )
 }
@@ -305,46 +324,136 @@ function Sidebar({
   onFileUpload,
   onDeleteDocument,
   onOpenSettings,
+  isMobileOpen,
+  onCloseMobile,
 }) {
   return (
-    <aside
-      className="z-10 flex h-full w-72 flex-shrink-0 flex-col border-r"
-      style={{
-        borderColor: 'var(--panel-border)',
-        background: 'var(--panel-bg)',
-        boxShadow: 'var(--panel-shadow)',
-      }}
-    >
-      <div className="docuhelp-scrollbar flex-1 space-y-6 overflow-y-auto">
-        <SidebarHero />
-        <div className="space-y-6 px-6 pb-6">
-          <UploadPanel
-            isIngestingDocuments={isIngestingDocuments}
-            onFileUpload={onFileUpload}
+    <>
+      <aside
+        className="z-10 hidden h-full w-72 flex-shrink-0 border-r lg:flex"
+        style={{
+          borderColor: 'var(--panel-border)',
+          background: 'var(--panel-bg)',
+          boxShadow: 'var(--panel-shadow)',
+        }}
+      >
+        <SidebarContent
+          storedDocuments={storedDocuments}
+          storageSummary={storageSummary}
+          ingestionProgress={ingestionProgress}
+          progressPercentage={progressPercentage}
+          errorMessage={errorMessage}
+          isIngestingDocuments={isIngestingDocuments}
+          deletingDocumentFileName={deletingDocumentFileName}
+          isLocalLlmSupported={isLocalLlmSupported}
+          isLocalLlmLoading={isLocalLlmLoading}
+          localLlmProgressText={localLlmProgressText}
+          localLlmProgressValue={localLlmProgressValue}
+          isLocalLlmReady={isLocalLlmReady}
+          localLlmErrorMessage={localLlmErrorMessage}
+          onFileUpload={onFileUpload}
+          onDeleteDocument={onDeleteDocument}
+          onOpenSettings={onOpenSettings}
+        />
+      </aside>
+
+      {isMobileOpen ? (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <button
+            type="button"
+            className="absolute inset-0 border-0"
+            style={{ background: 'rgba(2, 6, 23, 0.52)' }}
+            onClick={onCloseMobile}
+            aria-label="Close menu overlay"
           />
-          <StatusPanel
-            ingestionProgress={ingestionProgress}
-            progressPercentage={progressPercentage}
-            storageSummary={storageSummary}
-            errorMessage={errorMessage}
-          />
-          <LibraryModal
-            storedDocuments={storedDocuments}
-            deletingFileName={deletingDocumentFileName}
-            onDeleteDocument={onDeleteDocument}
-          />
-          <SettingsButton onOpenSettings={onOpenSettings} />
-          <HowDocuHelpWorksCard
-            isLocalLlmSupported={isLocalLlmSupported}
-            isLocalLlmLoading={isLocalLlmLoading}
-            localLlmProgressText={localLlmProgressText}
-            localLlmProgressValue={localLlmProgressValue}
-            isLocalLlmReady={isLocalLlmReady}
-            localLlmErrorMessage={localLlmErrorMessage}
-          />
+          <aside
+            className="absolute inset-y-0 left-0 flex w-[min(88vw,22rem)] max-w-full flex-col border-r"
+            style={{
+              borderColor: 'var(--panel-border)',
+              background: 'var(--panel-bg)',
+              boxShadow: 'var(--panel-shadow)',
+            }}
+          >
+            <SidebarContent
+              storedDocuments={storedDocuments}
+              storageSummary={storageSummary}
+              ingestionProgress={ingestionProgress}
+              progressPercentage={progressPercentage}
+              errorMessage={errorMessage}
+              isIngestingDocuments={isIngestingDocuments}
+              deletingDocumentFileName={deletingDocumentFileName}
+              isLocalLlmSupported={isLocalLlmSupported}
+              isLocalLlmLoading={isLocalLlmLoading}
+              localLlmProgressText={localLlmProgressText}
+              localLlmProgressValue={localLlmProgressValue}
+              isLocalLlmReady={isLocalLlmReady}
+              localLlmErrorMessage={localLlmErrorMessage}
+              onFileUpload={onFileUpload}
+              onDeleteDocument={onDeleteDocument}
+              onOpenSettings={onOpenSettings}
+              showMobileCloseButton
+              onCloseMobile={onCloseMobile}
+            />
+          </aside>
         </div>
+      ) : null}
+    </>
+  )
+}
+
+function SidebarContent({
+  storedDocuments,
+  storageSummary,
+  ingestionProgress,
+  progressPercentage,
+  errorMessage,
+  isIngestingDocuments,
+  deletingDocumentFileName,
+  isLocalLlmSupported,
+  isLocalLlmLoading,
+  localLlmProgressText,
+  localLlmProgressValue,
+  isLocalLlmReady,
+  localLlmErrorMessage,
+  onFileUpload,
+  onDeleteDocument,
+  onOpenSettings,
+  showMobileCloseButton = false,
+  onCloseMobile,
+}) {
+  return (
+    <div className="docuhelp-scrollbar flex-1 space-y-6 overflow-y-auto">
+      <SidebarHero
+        showCloseButton={showMobileCloseButton}
+        onCloseMobile={onCloseMobile}
+      />
+      <div className="space-y-6 px-6 pb-6">
+        <UploadPanel
+          isIngestingDocuments={isIngestingDocuments}
+          onFileUpload={onFileUpload}
+        />
+        <StatusPanel
+          ingestionProgress={ingestionProgress}
+          progressPercentage={progressPercentage}
+          storageSummary={storageSummary}
+          errorMessage={errorMessage}
+        />
+        <LibraryModal
+          storedDocuments={storedDocuments}
+          deletingFileName={deletingDocumentFileName}
+          onDeleteDocument={onDeleteDocument}
+        />
+        <SettingsButton onOpenSettings={onOpenSettings} />
+        <HowDocuHelpWorksCard
+          isLocalLlmSupported={isLocalLlmSupported}
+          isLocalLlmLoading={isLocalLlmLoading}
+          localLlmProgressText={localLlmProgressText}
+          localLlmProgressValue={localLlmProgressValue}
+          isLocalLlmReady={isLocalLlmReady}
+          localLlmErrorMessage={localLlmErrorMessage}
+        />
       </div>
-    </aside>
+    </div>
   )
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { SendHorizontal } from 'lucide-react'
+import { Menu, SendHorizontal } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -29,6 +29,7 @@ const MAX_TEXTAREA_HEIGHT = 112
  *   toggleFileSelection: (fileName: string) => void,
  *   onInitializeModel: () => Promise<unknown>,
  *   onAskQuestion: (userQuery: string) => Promise<void>,
+ *   onOpenMobileSidebar: () => void,
  * }} props - Chat messages, streaming state, and submit actions.
  * @returns {JSX.Element} The chat workspace.
  */
@@ -43,6 +44,7 @@ function ChatInterface({
   toggleFileSelection,
   onInitializeModel,
   onAskQuestion,
+  onOpenMobileSidebar,
 }) {
   const [draftQuery, setDraftQuery] = useState('')
   const messagesEndRef = useRef(null)
@@ -90,7 +92,7 @@ function ChatInterface({
   }
 
   return (
-    <section className="flex h-full flex-col" style={{ background: 'var(--panel-strong)' }}>
+    <section className="flex h-full min-w-0 flex-col" style={{ background: 'var(--panel-strong)' }}>
       <div className="flex-shrink-0 px-4 py-3 md:px-6">
         <ChatHeader
           messageCount={messages.length}
@@ -101,6 +103,7 @@ function ChatInterface({
           activeFileNames={activeFileNames}
           toggleFileSelection={toggleFileSelection}
           onInitializeModel={onInitializeModel}
+          onOpenMobileSidebar={onOpenMobileSidebar}
         />
       </div>
 
@@ -124,7 +127,7 @@ function ChatInterface({
         )}
       </div>
 
-      <div className="flex-shrink-0 px-4 py-4 md:px-6">
+      <div className="flex-shrink-0 px-3 py-3 md:px-6 md:py-4">
         <ChatComposer
           draftQuery={draftQuery}
           isGenerating={isGenerating}
@@ -151,6 +154,7 @@ function ChatInterface({
  *   activeFileNames: string[],
  *   toggleFileSelection: (fileName: string) => void,
  *   onInitializeModel: () => Promise<unknown>,
+ *   onOpenMobileSidebar: () => void,
  * }} props - Summary state for the chat session.
  * @returns {JSX.Element} The compact chat header.
  */
@@ -163,42 +167,112 @@ function ChatHeader({
   activeFileNames,
   toggleFileSelection,
   onInitializeModel,
+  onOpenMobileSidebar,
 }) {
+  const headerRef = useRef(null)
+  const [isCompactHeader, setIsCompactHeader] = useState(false)
+
+  useEffect(() => {
+    const headerElement = headerRef.current
+
+    if (!headerElement) {
+      return
+    }
+
+    const updateCompactHeaderState = () => {
+      setIsCompactHeader(headerElement.clientWidth < 700)
+    }
+
+    updateCompactHeaderState()
+
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateCompactHeaderState)
+
+      return () => {
+        window.removeEventListener('resize', updateCompactHeaderState)
+      }
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      updateCompactHeaderState()
+    })
+
+    resizeObserver.observe(headerElement)
+
+    return () => {
+      resizeObserver.disconnect()
+    }
+  }, [])
+
   return (
-    <div className="flex flex-wrap items-start justify-between gap-3">
+    <div ref={headerRef} className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3">
+          <button
+            type="button"
+            className="flex h-11 w-11 items-center justify-center rounded-full border transition lg:hidden"
+            style={{
+              borderColor: 'var(--panel-border)',
+              background: 'var(--panel-muted)',
+              color: 'var(--text-primary)',
+            }}
+            onClick={onOpenMobileSidebar}
+            aria-label="Open menu"
+          >
+            <Menu size={18} />
+          </button>
+          {!isCompactHeader ? (
+            <p
+              className="text-xs font-semibold uppercase tracking-[0.2em] lg:hidden"
+              style={{ color: 'var(--text-muted)' }}
+            >
+              Query Documents
+            </p>
+          ) : null}
+        </div>
+
+        <div className="flex flex-shrink-0 flex-wrap items-center justify-end gap-2">
+          {isModelReady ? (
+            <StatusBadge
+              label="Model ready"
+              tone="ready"
+            />
+          ) : null}
+          {!isModelReady && !isCompactHeader ? (
+            <StatusBadge
+              label="Model not ready"
+              tone="idle"
+            />
+          ) : null}
+          {!isModelReady ? (
+            <button
+              type="button"
+              className="rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition disabled:cursor-not-allowed disabled:opacity-45"
+              style={{
+                borderColor: 'var(--accent)',
+                background: 'var(--accent-soft)',
+                color: 'var(--accent)',
+              }}
+              onClick={() => {
+                void onInitializeModel()
+              }}
+              disabled={isModelLoading}
+            >
+              {getInitializeButtonLabel(isModelLoading, isCompactHeader)}
+            </button>
+          ) : null}
+          <StatusBadge
+            label={isGenerating ? 'Generating' : `${messageCount} messages`}
+            tone={isGenerating ? 'working' : 'neutral'}
+          />
+        </div>
+      </div>
+
       <DocumentSelector
         availableFileNames={availableFileNames}
         activeFileNames={activeFileNames}
         toggleFileSelection={toggleFileSelection}
       />
-
-      <div className="flex flex-wrap items-center gap-2">
-        <StatusBadge
-          label={isModelReady ? 'Model ready' : 'Model not ready'}
-          tone={isModelReady ? 'ready' : 'idle'}
-        />
-        {!isModelReady ? (
-          <button
-            type="button"
-            className="rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-[0.16em] transition disabled:cursor-not-allowed disabled:opacity-45"
-            style={{
-              borderColor: 'var(--accent)',
-              background: 'var(--accent-soft)',
-              color: 'var(--accent)',
-            }}
-            onClick={() => {
-              void onInitializeModel()
-            }}
-            disabled={isModelLoading}
-          >
-            {isModelLoading ? 'Loading model' : 'Initialize Local Model'}
-          </button>
-        ) : null}
-        <StatusBadge
-          label={isGenerating ? 'Generating' : `${messageCount} messages`}
-          tone={isGenerating ? 'working' : 'neutral'}
-        />
-      </div>
     </div>
   )
 }
@@ -209,14 +283,14 @@ function DocumentSelector({ availableFileNames, activeFileNames, toggleFileSelec
   }
 
   return (
-    <div className="max-w-4xl flex-1">
+    <div className="min-w-0 flex-1">
       <p
-        className="text-xs font-semibold uppercase tracking-[0.2em]"
+        className="hidden text-xs font-semibold uppercase tracking-[0.2em] lg:block"
         style={{ color: 'var(--text-muted)' }}
       >
         Query Documents
       </p>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="docuhelp-scrollbar flex gap-2 overflow-x-auto pb-1 lg:mt-2">
         {availableFileNames.map((fileName) => (
           <DocumentSelectorPill
             key={fileName}
@@ -234,7 +308,7 @@ function DocumentSelectorPill({ fileName, isActive, toggleFileSelection }) {
   return (
     <button
       type="button"
-      className="rounded-full border px-3 py-2 text-xs font-semibold transition"
+      className="flex-shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition"
       style={{
         borderColor: isActive ? 'var(--accent)' : 'var(--panel-border)',
         background: isActive ? 'var(--accent-soft)' : 'var(--panel-muted)',
@@ -259,7 +333,7 @@ function ChatMessageBubble({ message }) {
           isUserMessage
             ? {
               background: 'var(--message-user-bg)',
-              color: 'var(--accent-contrast)',
+              color: 'var(--message-user-text)',
             }
             : {
               background: 'var(--message-assistant-bg)',
@@ -273,9 +347,9 @@ function ChatMessageBubble({ message }) {
         </p>
 
         <div
-          className={`mt-3 max-w-none prose prose-sm md:prose-base md:prose-p:leading-8 prose-p:leading-7 ${isUserMessage ? 'prose-invert' : ''
+          className={`docuhelp-prose mt-3 max-w-none prose prose-sm md:prose-base md:prose-p:leading-8 prose-p:leading-7 ${isUserMessage ? 'docuhelp-prose-inverse prose-invert' : ''
             }`}
-          style={{ color: isUserMessage ? 'var(--accent-contrast)' : 'var(--text-primary)' }}
+          style={{ color: isUserMessage ? 'var(--message-user-text)' : 'var(--text-primary)' }}
         >
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
@@ -310,7 +384,10 @@ function StreamingMessageBubble({ currentStreamingReply }) {
         >
           DocuHelp
         </p>
-        <div className="mt-3 max-w-none prose prose-sm md:prose-base md:prose-p:leading-8 prose-p:leading-7">
+        <div
+          className="docuhelp-prose mt-3 max-w-none prose prose-sm md:prose-base md:prose-p:leading-8 prose-p:leading-7"
+          style={{ color: 'var(--text-primary)' }}
+        >
           <ReactMarkdown
             remarkPlugins={[remarkGfm, remarkMath]}
             rehypePlugins={[rehypeKatex]}
@@ -399,21 +476,21 @@ function ChatComposer({
   return (
     <form className="w-full" onSubmit={onSubmit}>
       <div
-        className="flex items-center gap-3 rounded-[1.6rem] border p-3"
+        className="flex items-end gap-3 rounded-[1.6rem] border p-2.5 md:p-3"
         style={{
           borderColor: 'var(--composer-border)',
           background: 'var(--composer-bg)',
           boxShadow: '0 18px 40px rgba(15, 23, 42, 0.08)',
         }}
       >
-        <div className="flex flex-1 items-center">
+        <div className="flex flex-1 items-end">
           <label className="sr-only" htmlFor="docuhelp-chat-input">
             Ask a question about your indexed documents
           </label>
           <textarea
             id="docuhelp-chat-input"
             ref={textareaRef}
-            className="w-full resize-none bg-transparent px-3 py-3.5 text-sm leading-5 outline-none placeholder:opacity-70"
+            className="w-full resize-none bg-transparent px-3 py-3 text-sm leading-5 outline-none placeholder:opacity-70 md:py-3.5"
             style={{
               minHeight: '48px',
               maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
@@ -432,7 +509,7 @@ function ChatComposer({
 
         <button
           type="submit"
-          className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45"
+          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 md:h-12 md:w-12"
           style={{
             background: 'var(--accent)',
             color: 'var(--accent-contrast)',
@@ -453,7 +530,7 @@ function StatusBadge({ label, tone }) {
 
   return (
     <span
-      className="rounded-full px-3 py-2 text-xs font-semibold uppercase tracking-[0.18em]"
+      className="rounded-full px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] md:text-xs md:tracking-[0.18em]"
       style={toneStyles}
     >
       {label}
@@ -487,6 +564,14 @@ function getStatusBadgeToneStyles(tone) {
     background: 'var(--panel-muted)',
     color: 'var(--text-secondary)',
   }
+}
+
+function getInitializeButtonLabel(isModelLoading, isCompactHeader) {
+  if (isModelLoading) {
+    return 'Loading model'
+  }
+
+  return isCompactHeader ? 'Model not ready' : 'Initialize model'
 }
 
 function resizeComposerTextarea(textareaElement) {

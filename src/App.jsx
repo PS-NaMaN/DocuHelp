@@ -43,6 +43,7 @@ function App() {
   const [deletingDocumentFileName, setDeletingDocumentFileName] = useState('')
   const [isChangingModel, setIsChangingModel] = useState(false)
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [ingestionProgress, setIngestionProgress] = useState(INITIAL_PROGRESS_STATE)
   const [errorMessage, setErrorMessage] = useState('')
   const {
@@ -249,6 +250,7 @@ function App() {
    * @returns {void}
    */
   function openSettingsModal() {
+    setIsMobileSidebarOpen(false)
     setIsSettingsModalOpen(true)
   }
 
@@ -259,6 +261,24 @@ function App() {
    */
   function closeSettingsModal() {
     setIsSettingsModalOpen(false)
+  }
+
+  /**
+   * Open the mobile sidebar drawer.
+   *
+   * @returns {void}
+   */
+  function openMobileSidebar() {
+    setIsMobileSidebarOpen(true)
+  }
+
+  /**
+   * Close the mobile sidebar drawer.
+   *
+   * @returns {void}
+   */
+  function closeMobileSidebar() {
+    setIsMobileSidebarOpen(false)
   }
 
   /**
@@ -277,7 +297,7 @@ function App() {
 
   return (
     <div
-      className="flex h-screen w-full overflow-hidden"
+      className="flex h-dvh min-h-screen w-full overflow-hidden"
       data-theme={themeName}
       style={{
         background: 'var(--app-bg)',
@@ -301,6 +321,8 @@ function App() {
         onFileUpload={handleFileUpload}
         onDeleteDocument={handleDeleteDocument}
         onOpenSettings={openSettingsModal}
+        isMobileOpen={isMobileSidebarOpen}
+        onCloseMobile={closeMobileSidebar}
       />
 
       <MainWorkspace
@@ -314,6 +336,7 @@ function App() {
         toggleFileSelection={toggleFileSelection}
         onInitializeModel={initializeModel}
         onAskQuestion={askQuestion}
+        onOpenMobileSidebar={openMobileSidebar}
       />
 
       {isSettingsModalOpen ? (
@@ -512,6 +535,7 @@ function syncActiveFileNamesWithAvailableFiles(previousActiveFileNames, availabl
  *   toggleFileSelection: (fileName: string) => void,
  *   onInitializeModel: () => Promise<unknown>,
  *   onAskQuestion: (userQuery: string) => Promise<void>,
+ *   onOpenMobileSidebar: () => void,
  * }} props - Main chat workspace state and actions.
  * @returns {JSX.Element} The main content panel.
  */
@@ -526,9 +550,10 @@ function MainWorkspace({
   toggleFileSelection,
   onInitializeModel,
   onAskQuestion,
+  onOpenMobileSidebar,
 }) {
   return (
-    <main className="relative flex h-full flex-1 flex-col">
+    <main className="relative flex h-full min-w-0 flex-1 flex-col">
       <ChatInterface
         messages={messages}
         currentStreamingReply={currentStreamingReply}
@@ -540,6 +565,7 @@ function MainWorkspace({
         toggleFileSelection={toggleFileSelection}
         onInitializeModel={onInitializeModel}
         onAskQuestion={onAskQuestion}
+        onOpenMobileSidebar={onOpenMobileSidebar}
       />
     </main>
   )
