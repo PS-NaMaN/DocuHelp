@@ -25,7 +25,7 @@ function SidebarHero({ showCloseButton = false, onCloseMobile }) {
       {showCloseButton ? (
         <button
           type="button"
-          className="flex h-10 w-10 items-center justify-center rounded-full border transition lg:hidden"
+          className="docuhelp-interactive-button flex h-10 w-10 items-center justify-center rounded-full border transition lg:hidden"
           style={{
             borderColor: 'var(--panel-border)',
             background: 'var(--panel-muted)',
@@ -51,7 +51,7 @@ function SettingsButton({ onOpenSettings }) {
   return (
     <button
       type="button"
-      className="flex w-full flex-col gap-2 rounded-[1.4rem] border p-4 text-left transition"
+      className="docuhelp-interactive-surface flex w-full flex-col gap-2 rounded-[1.4rem] border p-4 text-left transition"
       style={{
         borderColor: 'var(--panel-border)',
         background: 'var(--panel-elevated)',
@@ -120,7 +120,7 @@ function HowDocuHelpWorksCard({
     >
       <button
         type="button"
-        className="flex w-full items-start justify-between gap-4 p-4 text-left"
+        className="docuhelp-interactive-surface flex w-full items-start justify-between gap-4 p-4 text-left"
         onClick={() => setIsExpanded((previousValue) => !previousValue)}
       >
         <div>

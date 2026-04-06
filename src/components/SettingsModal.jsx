@@ -81,7 +81,7 @@ function SettingsModal({
             </div>
             <button
               type="button"
-              className="rounded-full border px-4 py-2 text-sm font-semibold transition"
+              className="docuhelp-interactive-button rounded-full border px-4 py-2 text-sm font-semibold transition"
               style={{
                 borderColor: 'var(--panel-border)',
                 background: 'var(--panel-muted)',
@@ -146,7 +146,7 @@ function ThemeSettingsCard({
           <button
             key={themeOption.id}
             type="button"
-            className="rounded-[1.2rem] border p-4 text-left transition"
+            className="docuhelp-interactive-surface rounded-[1.2rem] border p-4 text-left transition"
             style={{
               borderColor: themeOption.id === themeName ? 'var(--accent)' : 'var(--panel-border)',
               background: themeOption.id === themeName ? 'var(--accent-soft)' : 'var(--panel-strong)',
@@ -358,7 +358,7 @@ function ModelOptionCard({ modelOption, isActive, isChangingModel, onChangeModel
   return (
     <button
       type="button"
-      className="w-full rounded-[1.3rem] border px-4 py-4 text-left transition"
+      className="docuhelp-interactive-surface w-full rounded-[1.3rem] border px-4 py-4 text-left transition"
       style={{
         borderColor: isActive ? 'var(--accent)' : 'var(--panel-border)',
         background: isActive ? 'var(--accent-soft)' : 'var(--panel-muted)',
@@ -428,7 +428,7 @@ function LlmCacheDangerCard({ isDeletingLlmCache, onDeleteLlmCache }) {
       </p>
       <button
         type="button"
-        className="mt-4 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45"
+        className="docuhelp-interactive-button mt-4 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45"
         style={{
           background: 'var(--warning-text)',
           color: 'var(--panel-strong)',
@@ -455,7 +455,7 @@ function IndexedDataDangerCard({ isDeletingIndexedData, onDeleteIndexedData }) {
       </p>
       <button
         type="button"
-        className="mt-4 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45"
+        className="docuhelp-interactive-button mt-4 rounded-full px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-45"
         style={{
           background: 'var(--danger-text)',
           color: 'var(--panel-strong)',

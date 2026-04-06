@@ -210,7 +210,7 @@ function ChatHeader({
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
-            className="flex h-11 w-11 items-center justify-center rounded-full border transition lg:hidden"
+            className="docuhelp-interactive-button flex h-11 w-11 items-center justify-center rounded-full border transition lg:hidden"
             style={{
               borderColor: 'var(--panel-border)',
               background: 'var(--panel-muted)',
@@ -247,7 +247,7 @@ function ChatHeader({
           {!isModelReady ? (
             <button
               type="button"
-              className="rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition disabled:cursor-not-allowed disabled:opacity-45"
+              className="docuhelp-interactive-button rounded-full border px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] transition disabled:cursor-not-allowed disabled:opacity-45"
               style={{
                 borderColor: 'var(--accent)',
                 background: 'var(--accent-soft)',
@@ -308,7 +308,7 @@ function DocumentSelectorPill({ fileName, isActive, toggleFileSelection }) {
   return (
     <button
       type="button"
-      className="flex-shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition"
+      className="docuhelp-interactive-button docuhelp-interactive-inline flex-shrink-0 rounded-full border px-3 py-2 text-xs font-semibold transition"
       style={{
         borderColor: isActive ? 'var(--accent)' : 'var(--panel-border)',
         background: isActive ? 'var(--accent-soft)' : 'var(--panel-muted)',
@@ -509,7 +509,7 @@ function ChatComposer({
 
         <button
           type="submit"
-          className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 md:h-12 md:w-12"
+          className="docuhelp-interactive-button flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-45 md:h-12 md:w-12"
           style={{
             background: 'var(--accent)',
             color: 'var(--accent-contrast)',

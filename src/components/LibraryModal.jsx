@@ -86,7 +86,7 @@ function LibraryDocumentCard({ storedDocument, isDeleting, onDeleteDocument }) {
           </p>
           <button
             type="button"
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-50"
+            className="docuhelp-interactive-button flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-50"
             style={{
               borderColor: 'var(--danger-soft)',
               background: 'var(--panel-strong)',

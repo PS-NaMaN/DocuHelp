@@ -63,6 +63,9 @@ const THEME_PRESETS = {
     scrollbarTrack: 'rgba(148, 163, 184, 0.12)',
     scrollbarThumb: 'rgba(15, 118, 110, 0.36)',
     scrollbarThumbHover: 'rgba(15, 118, 110, 0.56)',
+    interactiveHoverShadow: '0 16px 36px rgba(15, 23, 42, 0.12)',
+    interactiveHoverBorder: 'rgba(15, 118, 110, 0.28)',
+    interactiveHoverBg: 'rgba(15, 118, 110, 0.08)',
   },
   dark: {
     appBg: 'linear-gradient(180deg, #0f172a 0%, #111827 100%)',
@@ -95,6 +98,9 @@ const THEME_PRESETS = {
     scrollbarTrack: 'rgba(148, 163, 184, 0.08)',
     scrollbarThumb: 'rgba(45, 212, 191, 0.28)',
     scrollbarThumbHover: 'rgba(45, 212, 191, 0.5)',
+    interactiveHoverShadow: '0 18px 42px rgba(2, 6, 23, 0.42)',
+    interactiveHoverBorder: 'rgba(94, 234, 212, 0.4)',
+    interactiveHoverBg: 'rgba(45, 212, 191, 0.12)',
   },
   amoled: {
     appBg: '#000000',
@@ -127,6 +133,9 @@ const THEME_PRESETS = {
     scrollbarTrack: 'rgba(255, 255, 255, 0.06)',
     scrollbarThumb: 'rgba(56, 189, 248, 0.34)',
     scrollbarThumbHover: 'rgba(56, 189, 248, 0.58)',
+    interactiveHoverShadow: '0 0 0 1px rgba(125, 211, 252, 0.2), 0 20px 44px rgba(0, 0, 0, 0.55)',
+    interactiveHoverBorder: 'rgba(125, 211, 252, 0.45)',
+    interactiveHoverBg: 'rgba(56, 189, 248, 0.12)',
   },
 }
 
@@ -604,6 +613,9 @@ function createCustomThemePreset(customThemeTokens) {
     scrollbarTrack: 'rgba(148, 163, 184, 0.08)',
     scrollbarThumb: colorWithAlpha(customThemeTokens.accent, 0.4),
     scrollbarThumbHover: colorWithAlpha(customThemeTokens.accent, 0.62),
+    interactiveHoverShadow: '0 16px 36px rgba(0, 0, 0, 0.22)',
+    interactiveHoverBorder: colorWithAlpha(customThemeTokens.accent, 0.4),
+    interactiveHoverBg: colorWithAlpha(customThemeTokens.accent, 0.12),
   }
 }
 

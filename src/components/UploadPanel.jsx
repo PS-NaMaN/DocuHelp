@@ -27,7 +27,7 @@ function UploadPanel({ isIngestingDocuments, onFileUpload }) {
         `all-MiniLM-L6-v2`.
       </p>
       <label
-        className="mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[1.2rem] border px-4 py-6 text-center transition"
+        className="docuhelp-interactive-surface mt-4 flex cursor-pointer flex-col items-center justify-center rounded-[1.2rem] border px-4 py-6 text-center transition"
         style={{
           borderColor: 'var(--panel-border)',
           background: 'var(--panel-muted)',
